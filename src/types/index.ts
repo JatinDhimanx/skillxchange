@@ -372,6 +372,8 @@ export interface ChatPeerInfo {
   headline?: string;
   rating?: number;
   online?: boolean;
+  college?: string;
+  status?: 'online' | 'busy' | 'offline';
 }
 
 export interface LedgerTransaction {
