@@ -267,7 +267,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
         {/* Search bar */}
         <div className="max-w-xl mx-auto space-y-3 relative z-10">
-          <div className="relative group flex flex-col sm:flex-row items-stretch sm:items-center bg-white rounded-2xl sm:rounded-full border border-slate-300 shadow-md focus-within:shadow-lg focus-within:border-slate-800 transition-all p-1.5 sm:p-1">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!isAuthenticated) {
+                openAuthModal('signup');
+                return;
+              }
+              onNavigate('matches');
+            }}
+            className="relative group flex flex-col sm:flex-row items-stretch sm:items-center bg-white rounded-2xl sm:rounded-full border border-slate-300 shadow-md focus-within:shadow-lg focus-within:border-slate-800 transition-all p-1.5 sm:p-1"
+          >
             <div className="relative flex-1 flex items-center">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 group-focus-within:text-slate-900 transition-colors pointer-events-none" />
               <input
@@ -279,21 +289,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
               />
             </div>
             <button
-              onClick={() => onNavigate('matches')}
-              className="mt-1 sm:mt-0 px-5 py-2.5 rounded-xl sm:rounded-full bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow transition-all whitespace-nowrap active:scale-95 text-center flex items-center justify-center gap-1.5"
+              type="submit"
+              className="mt-1 sm:mt-0 px-5 py-2.5 rounded-xl sm:rounded-full bg-slate-900 hover:bg-emerald-600 text-white font-semibold text-xs shadow transition-all whitespace-nowrap active:scale-95 text-center flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <span>Find Matches</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
-          </div>
+          </form>
 
           {/* Popular quick tags */}
           <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
             {['Python', 'Guitar', 'UI/UX', 'Japanese', 'Machine Learning', 'Yoga'].map(tag => (
               <button
                 key={tag}
-                onClick={() => setSimQuery(tag)}
-                className="px-2.5 sm:px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-600 text-[11px] font-medium hover:border-slate-400 hover:text-slate-900 transition-all active:scale-95"
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    openAuthModal('signup');
+                    return;
+                  }
+                  setSimQuery(tag);
+                  onNavigate('matches');
+                }}
+                className="px-2.5 sm:px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-600 text-[11px] font-medium hover:border-slate-400 hover:text-slate-900 transition-all active:scale-95 cursor-pointer"
               >
                 {tag}
               </button>

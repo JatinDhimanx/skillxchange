@@ -134,110 +134,117 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
             </span>
           </div>
 
-          {/* ── DESKTOP NAV ──────────────────────── */}
-          <nav className="hidden lg:flex items-center flex-nowrap shrink-0 gap-0.5 p-1 rounded-full bg-slate-100/80 border border-slate-200/80">
-            {mainNavItems.map(item => {
-              const isActive = currentTab === item.id;
-              return (
+          {/* ── DESKTOP NAV (Only when logged in) ──────────────────────── */}
+          {isAuthenticated && (
+            <nav className="hidden lg:flex items-center flex-nowrap shrink-0 gap-0.5 p-1 rounded-full bg-slate-100/80 border border-slate-200/80">
+              {mainNavItems.map(item => {
+                const isActive = currentTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleTabClick(item.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                      isActive
+                        ? 'bg-white text-slate-900 shadow-sm font-bold border border-slate-200/80'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                    }`}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+
+              {/* AI Labs Dropdown */}
+              <div className="relative shrink-0">
                 <button
-                  key={item.id}
-                  onClick={() => handleTabClick(item.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap shrink-0 ${
-                    isActive
-                      ? 'bg-white text-slate-900 shadow-sm font-bold border border-slate-200/80'
+                  onClick={() => {
+                    setShowLabsDropdown(!showLabsDropdown);
+                    setShowNotifications(false);
+                    setShowPersonaDropdown(false);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                    isLabActive
+                      ? 'bg-white text-slate-900 font-bold shadow-sm border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                   }`}
                 >
-                  {item.icon}
-                  <span>{item.label}</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>AI Labs</span>
+                  <ChevronDown className={`w-3 h-3 opacity-60 shrink-0 transition-transform duration-200 ${showLabsDropdown ? 'rotate-180' : ''}`} />
                 </button>
-              );
-            })}
 
-            {/* AI Labs Dropdown */}
-            <div className="relative shrink-0">
-              <button
-                onClick={() => {
-                  setShowLabsDropdown(!showLabsDropdown);
-                  setShowNotifications(false);
-                  setShowPersonaDropdown(false);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap shrink-0 ${
-                  isLabActive
-                    ? 'bg-white text-slate-900 font-bold shadow-sm border border-slate-200/80'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span>AI Labs</span>
-                <ChevronDown className={`w-3 h-3 opacity-60 shrink-0 transition-transform duration-200 ${showLabsDropdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showLabsDropdown && (
-                <div className="absolute left-0 mt-2 w-72 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 space-y-1 animate-slide-down">
-                  <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
-                    <span className="text-[10px] font-mono-ledger font-bold uppercase tracking-wider text-slate-400">
-                      AI Innovation Labs
-                    </span>
+                {showLabsDropdown && (
+                  <div className="absolute left-0 mt-2 w-72 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 space-y-1 animate-slide-down">
+                    <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
+                      <span className="text-[10px] font-mono-ledger font-bold uppercase tracking-wider text-slate-400">
+                        AI Innovation Labs
+                      </span>
+                    </div>
+                    {innovationItems.map(lab => (
+                      <button
+                        key={lab.id}
+                        onClick={() => handleTabClick(lab.id)}
+                        className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-all text-xs cursor-pointer ${
+                          currentTab === lab.id ? 'bg-slate-100 text-slate-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <div className="p-1.5 rounded-lg bg-slate-100 border border-slate-200/60 shrink-0">{lab.icon}</div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 whitespace-nowrap">{lab.label}</p>
+                          <p className="text-[10px] text-slate-500 truncate">{lab.desc}</p>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                  {innovationItems.map(lab => (
-                    <button
-                      key={lab.id}
-                      onClick={() => handleTabClick(lab.id)}
-                      className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-all text-xs ${
-                        currentTab === lab.id ? 'bg-slate-100 text-slate-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <div className="p-1.5 rounded-lg bg-slate-100 border border-slate-200/60 shrink-0">{lab.icon}</div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-900 whitespace-nowrap">{lab.label}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{lab.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </nav>
+                )}
+              </div>
+            </nav>
+          )}
 
           {/* ── RIGHT ACTIONS ─────────────────────── */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
-            {/* Credits pill — md+ */}
-            <div
-              onClick={() => handleTabClick('wallet')}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 text-xs font-mono-ledger cursor-pointer transition-all shrink-0 whitespace-nowrap"
-            >
-              <Coins className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span className="font-bold text-slate-900">{currentUser.creditsBalance.toFixed(1)} CR</span>
-            </div>
-
-            {/* Add Skill */}
-            <button
-              onClick={() => setShowAddSkillModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-semibold transition-all shrink-0 whitespace-nowrap shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline">Add skill</span>
-            </button>
-
-            {/* Notifications */}
-            <div className="relative shrink-0">
-              <button
-                onClick={() => {
-                  setShowNotifications(!showNotifications);
-                  setShowLabsDropdown(false);
-                  setShowPersonaDropdown(false);
-                }}
-                className="p-2 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 text-slate-700 transition-all relative shrink-0"
+            {/* Credits pill — md+ (Only when authenticated) */}
+            {isAuthenticated && (
+              <div
+                onClick={() => handleTabClick('wallet')}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 text-xs font-mono-ledger cursor-pointer transition-all shrink-0 whitespace-nowrap"
               >
-                <Bell className="w-4 h-4 shrink-0" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-600 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
-                    {unreadCount}
-                  </span>
-                )}
+                <Coins className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span className="font-bold text-slate-900">{currentUser.creditsBalance.toFixed(1)} CR</span>
+              </div>
+            )}
+
+            {/* Add Skill (Only when authenticated) */}
+            {isAuthenticated && (
+              <button
+                onClick={() => setShowAddSkillModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-semibold transition-all shrink-0 whitespace-nowrap shadow-sm cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Add skill</span>
               </button>
+            )}
+
+            {/* Notifications (Only when authenticated) */}
+            {isAuthenticated && (
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => {
+                    setShowNotifications(!showNotifications);
+                    setShowLabsDropdown(false);
+                    setShowPersonaDropdown(false);
+                  }}
+                  className="p-2 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 text-slate-700 transition-all relative shrink-0 cursor-pointer"
+                >
+                  <Bell className="w-4 h-4 shrink-0" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-600 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
 
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm p-3.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 space-y-2.5 animate-slide-down">
@@ -345,6 +352,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
                 </div>
               )}
             </div>
+          )}
 
             {/* Auth / Persona switcher */}
             {isAuthenticated ? (

@@ -26,7 +26,7 @@ import { AuthModal } from '../components/auth/AuthModal';
 const MainAppContent: React.FC = () => {
   const { toastMessage, dismissToast, authModalOpen, authModalTab, closeAuthModal } = useApp();
   const [currentTab, setCurrentTab] = useState<ScreenTab>('home');
-  const [showOnboarding, setShowOnboarding] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const renderScreen = () => {
     switch (currentTab) {
