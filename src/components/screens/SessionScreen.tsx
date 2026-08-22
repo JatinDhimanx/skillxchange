@@ -266,9 +266,8 @@ export const SessionScreen: React.FC = () => {
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [remoteFrameUrl, setRemoteFrameUrl] = useState<string | null>(null);
-  const [remotePeerInfo, setRemotePeerInfo] = useState<{ id: string; name: string; avatar: string; hasCamera?: boolean } | null>(null);
+  const [remotePeerInfo, setRemotePeerInfo] = useState<{ id: string; name: string; avatar: string } | null>(null);
   const [isSimulatedPeerActive, setIsSimulatedPeerActive] = useState<boolean>(false);
-  const [streamEndedInfo, setStreamEndedInfo] = useState<{ peerName: string; time: string } | null>(null);
 
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -278,10 +277,15 @@ export const SessionScreen: React.FC = () => {
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
   const [audioLevel, setAudioLevel] = useState<number>(35);
 
+  // Map of peerClientId -> RTCPeerConnection. Using a Map (instead of a single ref)
+  // means a peer's connection is only ever created ONCE and reused for its lifetime,
+  // instead of being torn down and rebuilt on every heartbeat/track update.
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const mediaStreamRef = useRef<MediaStream | null>(null);
   const realtimeChannelRef = useRef<any>(null);
   const localClientId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`);
+  // Always-current mirror of mediaStream, readable from inside stable (non-recreated)
+  // effects/callbacks without needing mediaStream in their dependency arrays.
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const ICE_SERVERS: RTCConfiguration = {
     iceServers: [
@@ -324,7 +328,6 @@ export const SessionScreen: React.FC = () => {
 
   // Launch Live Meeting from Lobby (as Attendee or as Host)
   const handleJoinClass = (cls: LiveClassItem) => {
-    setStreamEndedInfo(null);
     setActiveMeeting({
       id: cls.id,
       roomCode: cls.roomCode,
@@ -351,7 +354,6 @@ export const SessionScreen: React.FC = () => {
     if (matched) {
       handleJoinClass(matched);
     } else {
-      setStreamEndedInfo(null);
       setActiveMeeting({
         id: `room-${Date.now()}`,
         roomCode: code,
@@ -378,7 +380,6 @@ export const SessionScreen: React.FC = () => {
         if (matched) {
           handleJoinClass(matched);
         } else {
-          setStreamEndedInfo(null);
           setActiveMeeting({
             id: `room-${Date.now()}`,
             roomCode: code,
@@ -431,15 +432,6 @@ export const SessionScreen: React.FC = () => {
     }
   }, [mediaStream, isCameraActive, sessionView, viewMode]);
 
-  // Copy link helper
-  const copyMeetLink = () => {
-    if (typeof window !== 'undefined') {
-      const url = `${window.location.origin}/?room=${activeMeeting.roomCode}`;
-      navigator.clipboard?.writeText(url);
-      showToast(`Meeting invite link copied: ${url}`, 'success');
-    }
-  };
-
   // Keep remoteVideoRef and hostVideoRef attached to remoteStream
   useEffect(() => {
     if (remoteStream) {
@@ -454,31 +446,13 @@ export const SessionScreen: React.FC = () => {
     }
   }, [remoteStream, sessionView, viewMode, isScreenSharing]);
 
-  // Synchronize local media tracks to existing PeerConnections dynamically without closing connections
-  useEffect(() => {
-    mediaStreamRef.current = mediaStream;
-    if (!mediaStream) return;
-
-    peerConnectionsRef.current.forEach((pc, peerId) => {
-      if (pc.signalingState !== 'closed') {
-        const senders = pc.getSenders();
-        mediaStream.getTracks().forEach(track => {
-          const existingSender = senders.find(s => s.track && s.track.kind === track.kind);
-          if (existingSender) {
-            existingSender.replaceTrack(track).catch(err => console.error('Error replacing track for peer:', peerId, err));
-          } else {
-            try {
-              pc.addTrack(track, mediaStream);
-            } catch (err) {
-              console.error('Error adding track for peer:', peerId, err);
-            }
-          }
-        });
-      }
-    });
-  }, [mediaStream]);
-
   // ── WEBRTC P2P MULTI-DEVICE SIGNALING VIA SUPABASE REALTIME ──
+  // NOTE: this effect intentionally does NOT depend on `mediaStream`. It only
+  // depends on sessionView/roomCode, so the Realtime channel and any existing
+  // peer connections are never torn down just because the local camera stream
+  // changed — that was the root cause of "only my own video shows, never the
+  // other person's". Local tracks are pushed into already-open connections by
+  // the separate effect further below.
   useEffect(() => {
     if (sessionView !== 'live_meeting' || !supabase) return;
 
@@ -487,37 +461,52 @@ export const SessionScreen: React.FC = () => {
       config: { broadcast: { self: false } },
     });
     realtimeChannelRef.current = channel;
+    const pcMap = peerConnectionsRef.current;
 
-    const initPeerConnection = (targetClientId: string) => {
-      const existingPc = peerConnectionsRef.current.get(targetClientId);
-      if (
-        existingPc &&
-        !['failed', 'closed', 'disconnected'].includes(existingPc.connectionState) &&
-        existingPc.signalingState !== 'closed'
-      ) {
-        return existingPc;
-      }
+    const attachLocalTracks = (pc: RTCPeerConnection) => {
+      const stream = mediaStreamRef.current;
+      if (!stream) return;
+      const existingTrackIds = new Set(pc.getSenders().map(s => s.track?.id).filter(Boolean));
+      stream.getTracks().forEach(track => {
+        if (!existingTrackIds.has(track.id)) {
+          try {
+            pc.addTrack(track, stream);
+          } catch {}
+        }
+      });
+    };
 
-      if (existingPc) {
+    const closeAndRemovePeer = (peerId: string) => {
+      const pc = pcMap.get(peerId);
+      if (pc) {
         try {
-          existingPc.close();
+          pc.close();
         } catch {}
-        peerConnectionsRef.current.delete(targetClientId);
+        pcMap.delete(peerId);
+      }
+      setRemotePeerInfo(prev => (prev && prev.id === peerId ? null : prev));
+      setRemoteStream(prev => (pcMap.size === 0 ? null : prev));
+      setRemoteFrameUrl(prev => (pcMap.size === 0 ? null : prev));
+    };
+
+    // Get the existing connection for a peer if it's still usable, otherwise
+    // create a brand-new one. A peer's connection is created AT MOST ONCE per
+    // call session — never recreated on every heartbeat/ping.
+    const getOrCreatePeerConnection = (targetClientId: string): RTCPeerConnection => {
+      const existing = pcMap.get(targetClientId);
+      if (existing && existing.connectionState !== 'closed' && existing.connectionState !== 'failed') {
+        return existing;
+      }
+      if (existing) {
+        try {
+          existing.close();
+        } catch {}
+        pcMap.delete(targetClientId);
       }
 
       const pc = new RTCPeerConnection(ICE_SERVERS);
-      peerConnectionsRef.current.set(targetClientId, pc);
-
-      // Add local media tracks if active
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => {
-          try {
-            pc.addTrack(track, mediaStreamRef.current!);
-          } catch (err) {
-            console.error('Error adding track to new connection:', err);
-          }
-        });
-      }
+      pcMap.set(targetClientId, pc);
+      attachLocalTracks(pc);
 
       pc.onicecandidate = event => {
         if (event.candidate) {
@@ -535,7 +524,6 @@ export const SessionScreen: React.FC = () => {
       };
 
       pc.ontrack = event => {
-        console.log('Incoming remote WebRTC track from peer:', targetClientId, event.streams[0]);
         if (event.streams && event.streams[0]) {
           const stream = event.streams[0];
           setRemoteStream(stream);
@@ -550,32 +538,34 @@ export const SessionScreen: React.FC = () => {
         }
       };
 
-      pc.onnegotiationneeded = async () => {
-        if (localClientId.current > targetClientId) {
-          try {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            channel.send({
-              type: 'broadcast',
-              event: 'webrtc_signal',
-              payload: {
-                type: 'sdp_offer',
-                from: localClientId.current,
-                to: targetClientId,
-                sdp: offer,
-                senderName: currentUser.name,
-                senderAvatar: currentUser.avatar,
-              },
-            });
-          } catch (err) {
-            console.error('Renegotiation offer error for peer:', targetClientId, err);
-          }
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          closeAndRemovePeer(targetClientId);
         }
       };
 
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-          peerConnectionsRef.current.delete(targetClientId);
+      // Fires automatically whenever a track is added to an already-negotiated
+      // connection (e.g. camera turned on after the call already started).
+      // This is what lets a late-starting camera reach the other device
+      // without rebuilding the whole connection.
+      pc.onnegotiationneeded = async () => {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          channel.send({
+            type: 'broadcast',
+            event: 'webrtc_signal',
+            payload: {
+              type: 'sdp_offer',
+              from: localClientId.current,
+              to: targetClientId,
+              sdp: offer,
+              senderName: currentUser.name,
+              senderAvatar: currentUser.avatar,
+            },
+          });
+        } catch (err) {
+          console.error('Renegotiation failed:', err);
         }
       };
 
@@ -584,27 +574,24 @@ export const SessionScreen: React.FC = () => {
 
     const handlePeerArrived = async (peerPayload: any) => {
       if (!peerPayload || peerPayload.from === localClientId.current) return;
-      setRemotePeerInfo(prev => ({
+      setRemotePeerInfo(prev => prev ?? {
         id: peerPayload.from,
-        name: peerPayload.name || prev?.name || 'Remote Peer',
-        avatar: peerPayload.avatar || prev?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-        hasCamera: typeof peerPayload.hasCamera === 'boolean' ? peerPayload.hasCamera : prev?.hasCamera,
-      }));
+        name: peerPayload.name || 'Remote Peer',
+        avatar: peerPayload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+      });
 
-      const existingPc = peerConnectionsRef.current.get(peerPayload.from);
-      if (
-        existingPc &&
-        !['failed', 'closed', 'disconnected'].includes(existingPc.connectionState) &&
-        existingPc.signalingState !== 'closed'
-      ) {
-        // Active connection already established with this peer, do not recreate
+      // Already connected (or in the middle of connecting) to this peer —
+      // do NOT recreate the connection. This is what stopped the previous
+      // "reconnect every ~2.5s" behaviour caused by the heartbeat.
+      const existing = pcMap.get(peerPayload.from);
+      if (existing && existing.connectionState !== 'closed' && existing.connectionState !== 'failed') {
         return;
       }
 
-      // Deterministic initiator: the client with larger ID creates the offer
+      // Deterministic initiator: the client with the larger ID creates the offer
       const shouldInitiate = localClientId.current > peerPayload.from;
       if (shouldInitiate) {
-        const pc = initPeerConnection(peerPayload.from);
+        const pc = getOrCreatePeerConnection(peerPayload.from);
         try {
           const offer = await pc.createOffer({
             offerToReceiveAudio: true,
@@ -624,7 +611,7 @@ export const SessionScreen: React.FC = () => {
             },
           });
         } catch (err) {
-          console.error('Failed to create offer for peer:', peerPayload.from, err);
+          console.error('Failed to create offer:', err);
         }
       }
     };
@@ -636,50 +623,32 @@ export const SessionScreen: React.FC = () => {
       .on('broadcast', { event: 'peer_ping' }, async ({ payload }) => {
         handlePeerArrived(payload);
       })
-      .on('broadcast', { event: 'peer_status' }, ({ payload }) => {
-        if (!payload || payload.from === localClientId.current) return;
-        setRemotePeerInfo(prev => {
-          if (prev && prev.id === payload.from) {
-            return { ...prev, hasCamera: Boolean(payload.hasCamera) };
-          }
-          return prev;
-        });
-      })
       .on('broadcast', { event: 'peer_leave' }, ({ payload }) => {
-        if (!payload || payload.from === localClientId.current) return;
-        const leavingPeerId = payload.from;
-        const pc = peerConnectionsRef.current.get(leavingPeerId);
-        if (pc) {
-          try {
-            pc.close();
-          } catch {}
-          peerConnectionsRef.current.delete(leavingPeerId);
+        if (payload && payload.from) {
+          closeAndRemovePeer(payload.from);
         }
-        const peerName = payload.name || remotePeerInfo?.name || activeMeeting.instructorName || 'Remote Peer';
-        setStreamEndedInfo({
-          peerName,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        });
-        showToast(`⚠️ ${peerName} left the room. Stream ended.`, 'warning');
-        setRemotePeerInfo(null);
-        setRemoteStream(null);
-        setRemoteFrameUrl(null);
-        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-        if (hostVideoRef.current && !isScreenSharing) hostVideoRef.current.srcObject = null;
       })
       .on('broadcast', { event: 'webrtc_signal' }, async ({ payload }) => {
         if (!payload || payload.from === localClientId.current) return;
         if (payload.to && payload.to !== localClientId.current) return;
 
         if (payload.type === 'sdp_offer') {
-          setRemotePeerInfo(prev => ({
+          setRemotePeerInfo(prev => prev ?? {
             id: payload.from,
-            name: payload.senderName || prev?.name || 'Peer',
-            avatar: payload.senderAvatar || prev?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-            hasCamera: typeof payload.hasCamera === 'boolean' ? payload.hasCamera : prev?.hasCamera,
-          }));
-          const pc = initPeerConnection(payload.from);
+            name: payload.senderName || 'Peer',
+            avatar: payload.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+          });
+          // Reuse the existing connection if we already have one (handles both
+          // the initial offer AND later renegotiation offers on the same call).
+          const pc = getOrCreatePeerConnection(payload.from);
           try {
+            if (pc.signalingState !== 'stable') {
+              // Offer collision (glare) — roll back our own pending local offer
+              // and accept theirs instead.
+              try {
+                await pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit);
+              } catch {}
+            }
             await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -694,24 +663,24 @@ export const SessionScreen: React.FC = () => {
               },
             });
           } catch (err) {
-            console.error('Error handling SDP offer from peer:', payload.from, err);
+            console.error('Error handling SDP offer:', err);
           }
         } else if (payload.type === 'sdp_answer') {
-          const pc = peerConnectionsRef.current.get(payload.from);
-          if (pc && (pc.signalingState === 'have-local-offer' || pc.signalingState === 'have-remote-offer')) {
+          const pc = pcMap.get(payload.from);
+          if (pc) {
             try {
               await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
             } catch (err) {
-              console.error('Error handling SDP answer from peer:', payload.from, err);
+              console.error('Error handling SDP answer:', err);
             }
           }
         } else if (payload.type === 'ice_candidate') {
-          const pc = peerConnectionsRef.current.get(payload.from);
+          const pc = pcMap.get(payload.from);
           if (pc && payload.candidate) {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
             } catch (err) {
-              console.error('Error adding ICE candidate from peer:', payload.from, err);
+              console.error('Error adding ICE candidate:', err);
             }
           }
         }
@@ -733,12 +702,11 @@ export const SessionScreen: React.FC = () => {
       .on('broadcast', { event: 'video_frame' }, ({ payload }) => {
         if (payload && payload.from !== localClientId.current && payload.frame) {
           setRemoteFrameUrl(payload.frame);
-          setRemotePeerInfo(prev => ({
+          setRemotePeerInfo(prev => prev ?? {
             id: payload.from,
-            name: payload.name || prev?.name || 'Remote Peer',
-            avatar: payload.avatar || prev?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-            hasCamera: true,
-          }));
+            name: payload.name || 'Remote Peer',
+            avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+          });
         }
       })
       .on('broadcast', { event: 'emoji_reaction' }, ({ payload }) => {
@@ -755,13 +723,14 @@ export const SessionScreen: React.FC = () => {
               from: localClientId.current,
               name: currentUser.name,
               avatar: currentUser.avatar,
-              hasCamera: isCameraActive,
             },
           });
         }
       });
 
-    // Heartbeat to continuously discover peers joining on second device
+    // Heartbeat only DISCOVERS peers that haven't connected yet — it no longer
+    // tears down or recreates connections that already exist (see
+    // handlePeerArrived's early-return above).
     const pingInterval = setInterval(() => {
       if (channel) {
         channel.send({
@@ -771,7 +740,6 @@ export const SessionScreen: React.FC = () => {
             from: localClientId.current,
             name: currentUser.name,
             avatar: currentUser.avatar,
-            hasCamera: isCameraActive,
           },
         });
       }
@@ -779,33 +747,48 @@ export const SessionScreen: React.FC = () => {
 
     return () => {
       clearInterval(pingInterval);
+      channel.send({
+        type: 'broadcast',
+        event: 'peer_leave',
+        payload: { from: localClientId.current },
+      });
       channel.unsubscribe();
-      peerConnectionsRef.current.forEach(pc => {
+      pcMap.forEach(pc => {
         try {
           pc.close();
         } catch {}
       });
-      peerConnectionsRef.current.clear();
+      pcMap.clear();
+      realtimeChannelRef.current = null;
+      setRemoteStream(null);
+      setRemoteFrameUrl(null);
+      setRemotePeerInfo(null);
     };
   }, [sessionView, activeMeeting.roomCode]);
 
-  // Broadcast peer_status immediately when camera toggles
+  // Keep mediaStreamRef in sync, and push any new local tracks into peer
+  // connections that already exist (e.g. camera finished loading async, or was
+  // toggled on mid-call). Adding tracks to an already-connected RTCPeerConnection
+  // automatically fires onnegotiationneeded above, which renegotiates without
+  // rebuilding the connection from scratch.
   useEffect(() => {
-    if (realtimeChannelRef.current && sessionView === 'live_meeting') {
-      try {
-        realtimeChannelRef.current.send({
-          type: 'broadcast',
-          event: 'peer_status',
-          payload: {
-            from: localClientId.current,
-            hasCamera: isCameraActive,
-          },
-        });
-      } catch {}
-    }
-  }, [isCameraActive, sessionView]);
+    mediaStreamRef.current = mediaStream;
+    if (!mediaStream) return;
+    peerConnectionsRef.current.forEach(pc => {
+      const existingTrackIds = new Set(pc.getSenders().map(s => s.track?.id).filter(Boolean));
+      mediaStream.getTracks().forEach(track => {
+        if (!existingTrackIds.has(track.id)) {
+          try {
+            pc.addTrack(track, mediaStream);
+          } catch {}
+        }
+      });
+    });
+  }, [mediaStream]);
 
-  // Live Canvas Video Frame Broadcaster (Bulletproof Fallback across any NAT/Firewall)
+  // Live Canvas Video Frame Broadcaster (Bulletproof Fallback across any NAT/Firewall).
+  // Kept fully independent of the WebRTC lifecycle above so a temporary WebRTC
+  // hiccup never also kills this fallback at the same moment.
   useEffect(() => {
     if (sessionView !== 'live_meeting' || !isCameraActive) return;
 
@@ -842,7 +825,6 @@ export const SessionScreen: React.FC = () => {
 
   const handleCreateAndStartRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    setStreamEndedInfo(null);
     const topic = newRoomTopic.trim() || `${newRoomSkill} Live Interactive Masterclass`;
     setActiveMeeting({
       id: `room-${Date.now()}`,
@@ -858,26 +840,29 @@ export const SessionScreen: React.FC = () => {
     showToast(`Live Study Room [${generatedRoomCode}] broadcast is now ACTIVE!`, 'success');
   };
 
+  const copyMeetLink = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://skillxchange.vercel.app';
+    const link = `${origin}/?room=${activeMeeting.roomCode}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(link);
+    }
+    showToast(`Meeting link copied: ${link}`, 'success');
+  };
+
   // Toggle Camera
   const toggleCamera = async () => {
-    if (mediaStream && mediaStream.getVideoTracks().length > 0) {
-      if (isCameraActive) {
-        mediaStream.getVideoTracks().forEach(t => {
-          t.enabled = false;
-        });
-        setIsCameraActive(false);
-        showToast('Camera paused.', 'info');
-      } else {
-        mediaStream.getVideoTracks().forEach(t => {
-          t.enabled = true;
-        });
-        setIsCameraActive(true);
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = mediaStream;
-          localVideoRef.current.play().catch(() => {});
-        }
-        showToast('Camera resumed.', 'info');
-      }
+    // A stream already exists (even if currently paused/disabled) — just
+    // flip the existing video tracks instead of requesting a brand-new
+    // getUserMedia stream. Requesting a second stream while the first still
+    // exists can leak the old stream, trigger unnecessary renegotiation, and
+    // on some browsers fail outright because the camera device is still busy.
+    if (mediaStream) {
+      const newEnabled = !isCameraActive;
+      mediaStream.getVideoTracks().forEach(t => {
+        t.enabled = newEnabled;
+      });
+      setIsCameraActive(newEnabled);
+      showToast(newEnabled ? 'Camera resumed.' : 'Camera paused.', 'info');
     } else {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -1231,64 +1216,28 @@ export const SessionScreen: React.FC = () => {
 
   // End Meeting / Leave
   const handleLeaveMeeting = () => {
-    if (realtimeChannelRef.current) {
-      try {
-        realtimeChannelRef.current.send({
-          type: 'broadcast',
-          event: 'peer_leave',
-          payload: {
-            from: localClientId.current,
-            name: currentUser.name,
-            avatar: currentUser.avatar,
-          },
-        });
-      } catch {}
-    }
-
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
     }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(t => t.stop());
-      mediaStreamRef.current = null;
-    }
-
-    peerConnectionsRef.current.forEach(pc => {
-      try {
-        pc.close();
-      } catch {}
-    });
-    peerConnectionsRef.current.clear();
-
-    if (realtimeChannelRef.current) {
-      try {
-        realtimeChannelRef.current.unsubscribe();
-      } catch {}
-      realtimeChannelRef.current = null;
-    }
-
+    // Reset ALL call state so re-joining a room later starts completely fresh:
+    // otherwise mediaStream stays non-null (with dead/stopped tracks), the
+    // camera auto-start effect's `!mediaStream` check skips re-requesting the
+    // camera, and the next call silently has no local video at all.
     setMediaStream(null);
     setIsCameraActive(false);
     setRemoteStream(null);
     setRemoteFrameUrl(null);
     setRemotePeerInfo(null);
     setIsSimulatedPeerActive(false);
-
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
-    }
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-    if (hostVideoRef.current) {
-      hostVideoRef.current.srcObject = null;
-    }
-
-    // Clean URL query param if present
-    if (typeof window !== 'undefined' && window.location.search.includes('room=')) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    if (hostVideoRef.current) hostVideoRef.current.srcObject = null;
+    peerConnectionsRef.current.forEach(pc => {
+      try {
+        pc.close();
+      } catch {}
+    });
+    peerConnectionsRef.current.clear();
     setSessionView('lobby');
     endLiveSession();
     showToast(`Left meeting room [${activeMeeting.roomCode}].`, 'info');
@@ -1562,15 +1511,14 @@ export const SessionScreen: React.FC = () => {
                   <input
                     type="text"
                     readOnly
-                    value={typeof window !== 'undefined' ? `${window.location.origin}/?room=${generatedRoomCode}` : `/?room=${generatedRoomCode}`}
+                    value={`https://meet.skillexchange.org/room/${generatedRoomCode}`}
                     className="flex-1 px-3 py-2 rounded-lg bg-white border border-amber-200 text-xs font-mono-ledger text-slate-700 select-all"
                   />
                   <button
                     type="button"
                     onClick={() => {
-                      const url = typeof window !== 'undefined' ? `${window.location.origin}/?room=${generatedRoomCode}` : `/?room=${generatedRoomCode}`;
-                      navigator.clipboard?.writeText(url);
-                      showToast(`Invite link copied: ${url}`, 'success');
+                      navigator.clipboard?.writeText(`https://meet.skillexchange.org/room/${generatedRoomCode}`);
+                      showToast('Invite link copied!', 'success');
                     }}
                     className="p-2 rounded-lg bg-white hover:bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold transition-colors cursor-pointer"
                     title="Copy Link"
@@ -1704,79 +1652,6 @@ export const SessionScreen: React.FC = () => {
                       <span>Alex Rivera (Simulated Peer Video Feed)</span>
                     </div>
                   </div>
-                ) : streamEndedInfo ? (
-                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-950 via-rose-950/40 to-slate-950 flex-col gap-4 p-6 text-center animate-fade-in">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-rose-500/20 border-2 border-rose-500/50 flex items-center justify-center text-rose-400 shadow-2xl">
-                      <PhoneOff className="w-8 h-8 sm:w-10 sm:h-10 animate-pulse" />
-                    </div>
-                    <div className="space-y-1.5 max-w-md">
-                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-mono-ledger font-bold">
-                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-                        <span>STREAM ENDED</span>
-                      </div>
-                      <h3 className="font-display font-bold text-lg sm:text-xl text-white">
-                        {streamEndedInfo.peerName} left the session
-                      </h3>
-                      <p className="text-xs text-slate-400 font-mono-ledger">
-                        Live peer session disconnected at {streamEndedInfo.time}. You can take the micro-quiz to mint your proof or return to lobby.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                      <button
-                        onClick={() => setShowQuizModal(true)}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
-                      >
-                        <Award className="w-4 h-4" />
-                        <span>Take Quiz & Mint Block</span>
-                      </button>
-                      <button
-                        onClick={copyMeetLink}
-                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono-ledger font-bold text-xs border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <Copy className="w-4 h-4 text-amber-400" />
-                        <span>Copy Room Link</span>
-                      </button>
-                      <button
-                        onClick={handleLeaveMeeting}
-                        className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
-                      >
-                        <PhoneOff className="w-4 h-4" />
-                        <span>Return to Lobby</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : remotePeerInfo ? (
-                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3.5 p-4 text-center animate-fade-in">
-                    <img
-                      src={remotePeerInfo.avatar}
-                      alt={remotePeerInfo.name}
-                      className="w-20 sm:w-28 h-20 sm:h-28 rounded-full object-cover border-4 border-emerald-500/40 shadow-2xl"
-                    />
-                    <div className="space-y-1">
-                      <div className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-200 text-xs font-mono-ledger font-bold inline-flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${remotePeerInfo.hasCamera ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`}></span>
-                        <span>{remotePeerInfo.name} Connected</span>
-                        <span className="text-slate-500">•</span>
-                        <span className={remotePeerInfo.hasCamera ? 'text-emerald-400' : 'text-amber-400'}>
-                          {remotePeerInfo.hasCamera ? 'Connecting Video Feed...' : 'Camera Turned Off'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto font-mono-ledger">
-                        {remotePeerInfo.hasCamera ? 'Negotiating 1080p stream with remote device...' : 'Peer is in the session with camera turned off.'}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={copyMeetLink}
-                        className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono-ledger font-bold border border-slate-600 transition-all cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Copy className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Copy Room Link</span>
-                      </button>
-                    </div>
-                  </div>
                 ) : (
                   <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3.5 p-4 text-center">
                     <img
@@ -1853,33 +1728,6 @@ export const SessionScreen: React.FC = () => {
                     <img src={remoteFrameUrl} alt="Remote Peer Camera" className="w-full h-full object-cover" />
                   ) : isSimulatedPeerActive ? (
                     <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900&auto=format&fit=crop&q=80" alt="Simulated Peer Video" className="w-full h-full object-cover" />
-                  ) : streamEndedInfo ? (
-                    <div className="text-center space-y-3 p-4 bg-gradient-to-b from-slate-900 to-rose-950/40 w-full h-full flex flex-col items-center justify-center animate-fade-in">
-                      <div className="w-12 h-12 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 mx-auto shadow-lg">
-                        <PhoneOff className="w-6 h-6 animate-pulse" />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="inline-block px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono-ledger text-[10px] font-bold border border-rose-500/30">
-                          STREAM ENDED
-                        </div>
-                        <p className="text-xs font-bold text-white">{streamEndedInfo.peerName} disconnected</p>
-                        <p className="text-[10px] text-slate-400 font-mono-ledger">Ended at {streamEndedInfo.time}</p>
-                      </div>
-                      <button
-                        onClick={handleLeaveMeeting}
-                        className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer transition-all shadow-md active:scale-95"
-                      >
-                        Return to Lobby
-                      </button>
-                    </div>
-                  ) : remotePeerInfo ? (
-                    <div className="text-center space-y-2 p-2 animate-fade-in">
-                      <img src={remotePeerInfo.avatar} alt={remotePeerInfo.name} className="w-16 h-16 rounded-full object-cover border-2 border-emerald-400 mx-auto" />
-                      <p className="text-xs font-bold text-white">{remotePeerInfo.name}</p>
-                      <p className="text-[10px] font-mono-ledger text-amber-400">
-                        {remotePeerInfo.hasCamera ? 'Connecting Video Feed...' : 'Connected (Camera Off)'}
-                      </p>
-                    </div>
                   ) : (
                     <div className="text-center space-y-2 p-2">
                       <img src={activeMeeting.instructorAvatar} alt={activeMeeting.instructorName} className="w-16 h-16 rounded-full object-cover border-2 border-amber-400 mx-auto" />
@@ -1894,8 +1742,8 @@ export const SessionScreen: React.FC = () => {
                     </div>
                   )}
                   <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-950/80 text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${remoteStream || remoteFrameUrl || isSimulatedPeerActive ? 'bg-emerald-400 animate-ping' : streamEndedInfo ? 'bg-rose-500' : 'bg-amber-400'}`}></span>
-                    <span>{streamEndedInfo ? 'Stream Ended' : (remotePeerInfo?.name || activeMeeting.instructorName)} (Peer)</span>
+                    <span className={`w-2 h-2 rounded-full ${remoteStream || remoteFrameUrl || isSimulatedPeerActive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
+                    <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Peer)</span>
                   </div>
                 </div>
 
