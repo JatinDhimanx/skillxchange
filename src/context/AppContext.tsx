@@ -304,7 +304,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (dbNotes && dbNotes.length > 0) {
-        setNotebookEntries(dbNotes);
+        // Filter notes for this specific user or general guides
+        const userNotes = dbNotes.filter(n => !(n as any).userId || (n as any).userId === user.id);
+        setNotebookEntries(userNotes.length > 0 ? userNotes : dbNotes);
+      }
+
+      // User specific private transaction history
+      const txKey = `skillxchange_txns_${user.id}`;
+      const savedTx = localStorage.getItem(txKey);
+      if (savedTx) {
+        try {
+          setTransactions(JSON.parse(savedTx));
+        } catch {}
+      } else {
+        setTransactions([
+          {
+            id: `TXN-${user.id.slice(-4)}-01`,
+            date: new Date().toISOString().split('T')[0],
+            desc: 'Genesis Barter Credit Grant',
+            delta: +user.creditsBalance,
+            balance: user.creditsBalance,
+          },
+        ]);
+      }
+
+      // User specific private notifications
+      const notifKey = `skillxchange_notifs_${user.id}`;
+      const savedNotifs = localStorage.getItem(notifKey);
+      if (savedNotifs) {
+        try {
+          setNotifications(JSON.parse(savedNotifs));
+        } catch {}
+      } else {
+        setNotifications([
+          {
+            id: `notif-${Date.now()}`,
+            title: `Welcome, ${user.name.split(' ')[0]}!`,
+            desc: `Your decentralized account is verified with ${user.creditsBalance.toFixed(1)} initial barter credits.`,
+            time: 'Just now',
+            type: 'credit',
+            read: false,
+          },
+        ]);
       }
     } catch {}
   };

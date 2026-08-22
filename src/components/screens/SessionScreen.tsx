@@ -331,6 +331,69 @@ export const SessionScreen: React.FC = () => {
     }
   };
 
+  // Auto-join if ?room= query param is present in URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if (roomParam) {
+        const code = roomParam.trim().toUpperCase();
+        const matched = availableClasses.find(c => c.roomCode.toUpperCase() === code);
+        if (matched) {
+          handleJoinClass(matched);
+        } else {
+          setActiveMeeting({
+            id: `room-${Date.now()}`,
+            roomCode: code,
+            topic: `Live Study Session [${code}]`,
+            skill: currentUser?.skillsToLearn?.[0]?.skillName || 'Peer Skill Exchange',
+            instructorName: 'Live Instructor',
+            instructorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+            isHost: false,
+          });
+          setSessionView('live_meeting');
+          startLiveSession(`Live Room ${code}`, 'Live Instructor', currentUser.name, 'Peer Exchange');
+          showToast(`Joined Live Study Room [${code}] via invite link!`, 'success');
+        }
+      }
+    }
+  }, []);
+
+  // Auto-start camera when entering live_meeting
+  useEffect(() => {
+    let activeStream: MediaStream | null = null;
+    if (sessionView === 'live_meeting' && !mediaStream) {
+      navigator.mediaDevices?.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+        audio: true,
+      }).then(stream => {
+        activeStream = stream;
+        setMediaStream(stream);
+        setIsCameraActive(true);
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+          localVideoRef.current.play().catch(() => {});
+        }
+        showToast('Webcam and audio stream connected!', 'success');
+      }).catch(err => {
+        console.warn('Webcam permission not granted or prompt dismissed:', err);
+      });
+    }
+    return () => {
+      if (sessionView !== 'live_meeting' && activeStream) {
+        activeStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [sessionView]);
+
+  // Keep localVideoRef attached to stream on view updates
+  useEffect(() => {
+    if (localVideoRef.current && mediaStream && isCameraActive) {
+      localVideoRef.current.srcObject = mediaStream;
+      localVideoRef.current.play().catch(() => {});
+    }
+  }, [mediaStream, isCameraActive, sessionView, viewMode]);
+
   const handleCreateAndStartRoom = (e: React.FormEvent) => {
     e.preventDefault();
     const topic = newRoomTopic.trim() || `${newRoomSkill} Live Interactive Masterclass`;
@@ -349,33 +412,39 @@ export const SessionScreen: React.FC = () => {
   };
 
   const copyMeetLink = () => {
-    const link = `https://meet.skillexchange.org/room/${activeMeeting.roomCode}`;
-    navigator.clipboard?.writeText(link);
-    showToast('Meeting invite link copied to clipboard!', 'success');
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://skillxchange.vercel.app';
+    const link = `${origin}/?room=${activeMeeting.roomCode}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(link);
+    }
+    showToast(`Meeting link copied: ${link}`, 'success');
   };
 
   // Toggle Camera
   const toggleCamera = async () => {
     if (isCameraActive && mediaStream) {
-      mediaStream.getTracks().forEach(t => t.stop());
-      setMediaStream(null);
-      setIsCameraActive(false);
-      showToast('Camera paused.', 'info');
+      mediaStream.getVideoTracks().forEach(t => {
+        t.enabled = !t.enabled;
+      });
+      const newState = !isCameraActive;
+      setIsCameraActive(newState);
+      showToast(newState ? 'Camera resumed.' : 'Camera paused.', 'info');
     } else {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
           audio: true,
         });
         setMediaStream(stream);
         setIsCameraActive(true);
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          localVideoRef.current.play().catch(() => {});
         }
         showToast('Webcam stream connected!', 'success');
-      } catch {
+      } catch (err: any) {
         setIsCameraActive(false);
-        showToast('Webcam permission not granted. Switched to aesthetic avatar tile.', 'warning');
+        showToast('Webcam permission not granted. Switched to avatar.', 'warning');
       }
     }
   };
