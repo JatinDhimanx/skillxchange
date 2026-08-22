@@ -300,10 +300,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const fillDemoAccount = (email: string) => {
-    setSignInEmail(email);
-    setSignInPassword('password123');
+  const handleQuickDemoLogin = async (demo: {
+    email: string;
+    pass: string;
+    name: string;
+    handle: string;
+    headline: string;
+    teach: string;
+    learn: string;
+    avatar: string;
+  }) => {
+    setSignInEmail(demo.email);
+    setSignInPassword(demo.pass);
+    setLoading(true);
     setErrorMsg(null);
+    try {
+      let res = await loginUser(demo.email, demo.pass);
+      if (!res.success) {
+        // Auto register if account not in Supabase yet
+        const regRes = await registerUser({
+          email: demo.email,
+          password: demo.pass,
+          name: demo.name,
+          handle: demo.handle,
+          headline: demo.headline,
+          teachSkill: demo.teach,
+          learnSkill: demo.learn,
+          avatar: demo.avatar,
+        });
+
+        if (regRes.success) {
+          res = await loginUser(demo.email, demo.pass);
+        }
+      }
+
+      if (res.success) {
+        setSuccessCelebration(true);
+        setTimeout(() => {
+          onClose();
+        }, 800);
+      } else {
+        setErrorMsg(res.error || 'Failed to sign in demo account.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Demo login failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -622,8 +665,95 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </button>
                 </form>
 
+                {/* ── 2 DEMO USERS FOR INSTANT TESTING ─────────────────── */}
+                <div className="mt-5 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold font-mono-ledger text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>1-Click Test Accounts</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-semibold font-mono-ledger">
+                      Instant Testing
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* User 1: Aarav Sharma */}
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() =>
+                        handleQuickDemoLogin({
+                          email: 'aarav.sharma@skillexchange.org',
+                          pass: 'Password123!',
+                          name: 'Aarav Sharma',
+                          handle: '@aarav_dev',
+                          headline: 'Full-Stack & Machine Learning Tutor',
+                          teach: 'Python & AI',
+                          learn: 'Guitar & Music Theory',
+                          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+                        })
+                      }
+                      className="p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500/60 bg-slate-50/70 hover:bg-emerald-50/40 text-left transition-all group cursor-pointer flex items-center gap-2.5 active:scale-[0.98]"
+                    >
+                      <img
+                        src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+                        alt="Aarav"
+                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 truncate">
+                            Aarav (User A)
+                          </p>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-mono-ledger font-bold">
+                            Dev
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate">Teaches: Python & AI</p>
+                      </div>
+                    </button>
+
+                    {/* User 2: Priya Patel */}
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() =>
+                        handleQuickDemoLogin({
+                          email: 'priya.patel@skillexchange.org',
+                          pass: 'Password123!',
+                          name: 'Priya Patel',
+                          handle: '@priya_design',
+                          headline: 'Lead Product Designer & UX Mentor',
+                          teach: 'UI/UX & Figma',
+                          learn: 'Python & AI',
+                          avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+                        })
+                      }
+                      className="p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500/60 bg-slate-50/70 hover:bg-emerald-50/40 text-left transition-all group cursor-pointer flex items-center gap-2.5 active:scale-[0.98]"
+                    >
+                      <img
+                        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80"
+                        alt="Priya"
+                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 truncate">
+                            Priya (User B)
+                          </p>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-mono-ledger font-bold">
+                            Design
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate">Teaches: UI/UX Design</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Secure Authentication Badge */}
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono-ledger">
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono-ledger">
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Supabase Auth & Database Verified</span>
