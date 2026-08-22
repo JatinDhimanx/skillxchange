@@ -298,7 +298,7 @@ export const SessionScreen: React.FC = () => {
       isHost: false,
     });
     setSessionView('live_meeting');
-    startLiveSession(cls.topic, cls.instructorName, currentUser.name, cls.skill);
+    startLiveSession(cls.topic, cls.instructorName, currentUser.name, cls.skill, cls.roomCode);
     showToast(`Connected to Live Room [${cls.roomCode}] with ${cls.instructorName}!`, 'success');
   };
 
@@ -324,7 +324,7 @@ export const SessionScreen: React.FC = () => {
         isHost: false,
       });
       setSessionView('live_meeting');
-      startLiveSession(`Live Room ${code}`, 'Peer Mentor', currentUser.name, 'Peer Exchange');
+      startLiveSession(`Live Room ${code}`, 'Peer Mentor', currentUser.name, 'Peer Exchange', code);
       showToast(`Joined Study Room [${code}]!`, 'success');
     }
   };
@@ -349,7 +349,7 @@ export const SessionScreen: React.FC = () => {
             isHost: false,
           });
           setSessionView('live_meeting');
-          startLiveSession(`Live Room ${code}`, 'Live Instructor', currentUser.name, 'Peer Exchange');
+          startLiveSession(`Live Room ${code}`, 'Live Instructor', currentUser.name, 'Peer Exchange', code);
           showToast(`Joined Live Study Room [${code}] via invite link!`, 'success');
         }
       }
@@ -358,14 +358,21 @@ export const SessionScreen: React.FC = () => {
 
   useEffect(() => {
     if (activeSession && activeSession.roomCode) {
-      setActiveMeeting({
-        id: activeSession.id,
-        roomCode: activeSession.roomCode,
-        topic: activeSession.title,
-        skill: activeSession.skillName,
-        instructorName: activeSession.teacherName,
-        instructorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-        isHost: activeSession.teacherName === currentUser?.name,
+      // Only update activeMeeting if the room code actually changed.
+      // This prevents startLiveSession's side-effect from resetting a room
+      // the user already joined (which caused both devices to end up on
+      // different Supabase Realtime channels / different room IDs).
+      setActiveMeeting(prev => {
+        if (prev.roomCode === activeSession.roomCode) return prev; // already correct, no-op
+        return {
+          id: activeSession.id,
+          roomCode: activeSession.roomCode || '',
+          topic: activeSession.title || '',
+          skill: activeSession.skillName || '',
+          instructorName: activeSession.teacherName || 'Peer',
+          instructorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+          isHost: activeSession.teacherName === currentUser?.name,
+        };
       });
       setSessionView('live_meeting');
     }
@@ -809,7 +816,7 @@ export const SessionScreen: React.FC = () => {
       isHost: true,
     });
     setSessionView('live_meeting');
-    startLiveSession(topic, currentUser?.name, 'Live Attendees', newRoomSkill);
+    startLiveSession(topic, currentUser?.name, 'Live Attendees', newRoomSkill, generatedRoomCode);
     showToast(`Live Study Room [${generatedRoomCode}] broadcast is now ACTIVE!`, 'success');
   };
 
