@@ -1,0 +1,370 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary:     #F8FAFC;
+  --bg-surface:     #FFFFFF;
+  --bg-subtle:      #F1F5F9;
+  --bg-card:        #FFFFFF;
+  --text-primary:   #0F172A;
+  --text-secondary: #334155;
+  --text-tertiary:  #64748B;
+  --text-muted:     #94A3B8;
+  --accent-teach:   #D97706;
+  --accent-teach-bg:#FEF3C7;
+  --accent-teach-tx:#92400E;
+  --accent-learn:   #059669;
+  --accent-learn-bg:#D1FAE5;
+  --accent-learn-tx:#065F46;
+  --accent-urgent:  #E11D48;
+  --line-border:    #E2E8F0;
+  --line-strong:    #CBD5E1;
+  --radius-sm:      8px;
+  --radius-md:      12px;
+  --radius-lg:      16px;
+  --radius-full:    9999px;
+  --ink:            #0F172A;
+  --paper:          #FFFFFF;
+  --paper-soft:     #F8FAFC;
+  --chalk:          #0F172A;
+  --marigold:       #D97706;
+  --marigold-dark:  #B45309;
+  --jade:           #059669;
+  --jade-dark:      #047857;
+  --rust:           #E11D48;
+  --line:           #E2E8F0;
+  --line-dark:      #CBD5E1;
+
+  /* Smooth scroll globally */
+  scroll-behavior: smooth;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+  letter-spacing: -0.011em;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: var(--font-heading), var(--font-inter), sans-serif;
+  color: var(--text-primary);
+  letter-spacing: -0.025em;
+  font-weight: 700;
+  text-wrap: balance;
+  line-height: 1.2;
+}
+
+p { text-wrap: pretty; }
+
+.font-mono-ledger, .ledger-mono {
+  font-family: var(--font-mono-ledger), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   SMOOTH GLOBAL TRANSITIONS
+   ============================================================ */
+a, button {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Minimum tap target size for mobile accessibility */
+button, [role="button"] {
+  min-height: 36px;
+  cursor: pointer;
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes floatSubtle {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(5, 150, 105, 0); }
+}
+
+@keyframes shimmerEffect {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes chalkLineDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes mobileDrawer {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Animation classes */
+.animate-fade-in-up   { animation: fadeInUp   0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade-scale   { animation: fadeInScale 0.3s  cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-float        { animation: floatSubtle 4s ease-in-out infinite; }
+.animate-pulse-glow   { animation: pulseGlow  2.5s infinite; }
+.animate-slide-in-left  { animation: slideInLeft  0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-slide-in-right { animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-slide-down   { animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-count-up     { animation: countUp   0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-mobile-drawer { animation: mobileDrawer 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+.chalk-line-anim {
+  stroke-dasharray: 260;
+  stroke-dashoffset: 260;
+  animation: chalkLineDraw 1.5s ease-out forwards;
+}
+
+/* Stagger delays */
+.stagger-1 { animation-delay: 0ms; }
+.stagger-2 { animation-delay: 70ms; }
+.stagger-3 { animation-delay: 140ms; }
+.stagger-4 { animation-delay: 210ms; }
+.stagger-5 { animation-delay: 280ms; }
+.stagger-6 { animation-delay: 350ms; }
+.stagger-7 { animation-delay: 420ms; }
+.stagger-8 { animation-delay: 490ms; }
+
+/* ============================================================
+   CARD SYSTEM
+   ============================================================ */
+.paper-card {
+  background-color: #FFFFFF;
+  color: var(--text-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s ease;
+}
+
+.paper-card:hover {
+  transform: translateY(-3px);
+  border-color: #CBD5E1;
+  box-shadow: 0 16px 32px -4px rgba(15, 23, 42, 0.1), 0 4px 8px -2px rgba(15, 23, 42, 0.04);
+}
+
+/* Touch devices: disable hover lift (avoids sticky states) */
+@media (hover: none) {
+  .paper-card:hover {
+    transform: none;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
+  }
+  .paper-card:active {
+    transform: scale(0.98);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  }
+}
+
+.ink-soft-panel {
+  background-color: #FFFFFF;
+  border-radius: var(--radius-lg);
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn-primary-marigold {
+  background-color: #0F172A;
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  white-space: nowrap;
+}
+.btn-primary-marigold:hover  { background-color: #1E293B; transform: translateY(-1px); box-shadow: 0 6px 16px -2px rgba(15, 23, 42, 0.2); }
+.btn-primary-marigold:active { transform: scale(0.97); }
+
+.btn-jade {
+  background-color: #059669;
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 2px rgba(5, 150, 105, 0.15);
+  white-space: nowrap;
+}
+.btn-jade:hover  { background-color: #047857; transform: translateY(-1px); box-shadow: 0 6px 16px -2px rgba(5, 150, 105, 0.3); }
+.btn-jade:active { transform: scale(0.97); }
+
+/* ============================================================
+   TRUST BADGE
+   ============================================================ */
+.trust-score-stamp {
+  font-family: var(--font-mono-ledger), monospace;
+  border: 1px solid #A7F3D0;
+  color: #065F46;
+  background-color: #ECFDF5;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.trust-score-stamp:hover { transform: rotate(-1deg) scale(1.03); box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15); }
+
+/* ============================================================
+   INPUTS
+   ============================================================ */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #0F172A !important;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* ============================================================
+   SHIMMER
+   ============================================================ */
+.shimmer-badge {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmerEffect 3s infinite;
+}
+
+/* ============================================================
+   PEER CARD EFFECTS
+   ============================================================ */
+.skill-cat-badge {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.skill-cat-badge:hover {
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.09);
+}
+
+.peer-card:hover .peer-avatar {
+  box-shadow: 0 0 0 3px #059669, 0 0 0 5px #D1FAE5;
+  transition: box-shadow 0.3s ease;
+}
+
+/* ============================================================
+   GRADIENT TEXT
+   ============================================================ */
+.gradient-text-hero {
+  background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 50%, #0F172A 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 6s ease infinite;
+}
+
+/* ============================================================
+   GLOW BLOB
+   ============================================================ */
+.glow-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ============================================================
+   MOBILE DRAWER OVERLAY
+   ============================================================ */
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.3);
+  backdrop-filter: blur(4px);
+  z-index: 40;
+  animation: fadeInScale 0.2s ease both;
+}
+
+/* ============================================================
+   SCROLLBAR STYLING
+   ============================================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* ============================================================
+   RESPONSIVE TYPOGRAPHY SCALE
+   ============================================================ */
+@media (max-width: 640px) {
+  h1 { font-size: clamp(1.75rem, 7vw, 3rem); line-height: 1.15; }
+  h2 { font-size: clamp(1.35rem, 5vw, 2rem); }
+  h3 { font-size: clamp(1rem, 4vw, 1.35rem); }
+  .font-display { letter-spacing: -0.02em; }
+}
+
+/* ============================================================
+   SMOOTH PAGE SECTION REVEAL
+   ============================================================ */
+.section-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.section-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
