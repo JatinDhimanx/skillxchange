@@ -1225,7 +1225,7 @@ export const SessionScreen: React.FC = () => {
           </div>
 
           {/* ── GOOGLE MEET BOTTOM CONTROL DOCK ──────────────────────── */}
-          <div className="p-3 sm:p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-xl">
+          <div className="p-2.5 sm:p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shadow-xl">
             
             {/* Left: Time & Meeting Code */}
             <div className="hidden sm:flex items-center gap-2 text-slate-300 font-mono-ledger text-xs">
@@ -1235,66 +1235,66 @@ export const SessionScreen: React.FC = () => {
             </div>
 
             {/* Center: Main Stream Action Buttons */}
-            <div className="flex items-center gap-2 sm:gap-3 mx-auto sm:mx-0">
+            <div className="flex items-center gap-1.5 sm:gap-3 mx-auto sm:mx-0 flex-wrap justify-center">
               {/* Mic Toggle */}
               <button
                 onClick={() => setIsMuted(!isMuted)}
-                className={`p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
                   isMuted ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
                 title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
               >
-                {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
 
               {/* Camera Toggle */}
               <button
                 onClick={toggleCamera}
-                className={`p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
                   isCameraActive ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
                 title={isCameraActive ? 'Turn Off Camera' : 'Turn On Camera'}
               >
-                {isCameraActive ? <VideoIcon className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+                {isCameraActive ? <VideoIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
 
               {/* Screen Share Toggle */}
               <button
                 onClick={toggleScreenShare}
-                className={`p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
                   isScreenSharing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
                 title="Share Screen"
               >
-                <Share2 className="w-5 h-5" />
+                <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
               {/* Raise Hand Toggle */}
               <button
                 onClick={() => setHandRaised(!handRaised)}
-                className={`p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
                   handRaised ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
                 title="Raise Hand"
               >
-                <Hand className="w-5 h-5" />
+                <Hand className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
               {/* Fullscreen in Dock */}
               <button
                 onClick={toggleFullscreen}
-                className={`p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
                   isFullscreen ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
                 title="Full Screen Video"
               >
-                <Maximize2 className="w-5 h-5" />
+                <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
               {/* Red End Call Button */}
               <button
                 onClick={handleLeaveMeeting}
-                className="px-5 py-3 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
+                className="px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
                 title="Leave Meeting"
               >
                 <PhoneOff className="w-4 h-4" />
@@ -1303,45 +1303,45 @@ export const SessionScreen: React.FC = () => {
             </div>
 
             {/* Right: Side Panel Toggles */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 sm:gap-1.5 mx-auto sm:mx-0">
               <button
                 onClick={() => setActiveSidePanel(activeSidePanel === 'chat' ? null : 'chat')}
-                className={`p-2.5 rounded-2xl border transition-colors cursor-pointer ${
+                className={`p-2 sm:p-2.5 rounded-2xl border transition-colors cursor-pointer ${
                   activeSidePanel === 'chat' ? 'bg-amber-500 text-slate-900 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
                 title="In-Call Chat"
               >
-                <MessageSquare className="w-4 h-4" />
+                <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
               <button
                 onClick={() => setActiveSidePanel(activeSidePanel === 'whiteboard' ? null : 'whiteboard')}
-                className={`p-2.5 rounded-2xl border transition-colors cursor-pointer ${
+                className={`p-2 sm:p-2.5 rounded-2xl border transition-colors cursor-pointer ${
                   activeSidePanel === 'whiteboard' ? 'bg-amber-500 text-slate-900 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
                 title="Collaborative Whiteboard"
               >
-                <Edit3 className="w-4 h-4" />
+                <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
               <button
                 onClick={() => setActiveSidePanel(activeSidePanel === 'code' ? null : 'code')}
-                className={`p-2.5 rounded-2xl border transition-colors cursor-pointer ${
+                className={`p-2 sm:p-2.5 rounded-2xl border transition-colors cursor-pointer ${
                   activeSidePanel === 'code' ? 'bg-amber-500 text-slate-900 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
                 title="Code Sandbox"
               >
-                <Code className="w-4 h-4" />
+                <Code className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
               <button
                 onClick={() => setActiveSidePanel(activeSidePanel === 'copilot' ? null : 'copilot')}
-                className={`p-2.5 rounded-2xl border transition-colors cursor-pointer ${
+                className={`p-2 sm:p-2.5 rounded-2xl border transition-colors cursor-pointer ${
                   activeSidePanel === 'copilot' ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
                 title="AI Copilot & Transcript"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
 

@@ -244,7 +244,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden relative grid grid-cols-1 md:grid-cols-12 min-h-[580px] max-h-[92vh] animate-scale-up"
+        className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden relative grid grid-cols-1 md:grid-cols-12 min-h-0 md:min-h-[580px] max-h-[92vh] animate-scale-up"
         onClick={e => e.stopPropagation()}
       >
         {/* Close Button */}
