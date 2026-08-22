@@ -228,10 +228,159 @@ export interface AppContextType {
   openAuthModal: (tab?: 'signin' | 'signup' | 'forgot' | 'reset_password') => void;
   closeAuthModal: () => void;
   loginUser: (email: string, pass: string) => Promise<{ success: boolean; error: string | null }>;
+  loginAsDemoUser: (demoUser: UserProfile) => void;
   registerUser: (data: SignUpData) => Promise<{ success: boolean; needsEmailVerification: boolean; error: string | null }>;
   resendVerification: (email: string) => Promise<boolean>;
   logoutUser: () => Promise<void>;
 }
+
+export const DEMO_USER_AARAV: UserProfile = {
+  id: 'user-demo-aarav',
+  name: 'Aarav Sharma',
+  handle: '@aarav_dev',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+  headline: 'Full-Stack & Machine Learning Tutor',
+  bio: 'Hey! I am Aarav. I teach Python, Machine Learning, and Next.js, and I want to learn acoustic guitar.',
+  location: 'Bangalore, India',
+  timezone: 'IST (UTC+5:30)',
+  college: 'BMS Institute of Technology',
+  collegeVerified: true,
+  languages: ['English', 'Hindi'],
+  skillsToTeach: [
+    {
+      skillId: 'teach-python-01',
+      skillName: 'Python & AI',
+      category: 'Programming',
+      level: 'Advanced',
+      yearsExperience: 4,
+      verified: true,
+      verificationBadge: 'Verified Peer',
+      hourlyRateInr: 600,
+      hourlyRateCredits: 1.5,
+      proofCount: 8,
+    },
+    {
+      skillId: 'teach-nextjs-01',
+      skillName: 'Next.js & React',
+      category: 'Programming',
+      level: 'Intermediate',
+      yearsExperience: 3,
+      verified: true,
+      verificationBadge: 'Verified Peer',
+      hourlyRateInr: 500,
+      hourlyRateCredits: 1.0,
+      proofCount: 5,
+    },
+  ],
+  skillsToLearn: [
+    {
+      skillId: 'learn-guitar-01',
+      skillName: 'Guitar & Music Theory',
+      targetLevel: 'Intermediate',
+      urgency: 'flexible',
+      currentRoadmapStep: 2,
+      totalRoadmapSteps: 6,
+      progressPercent: 30,
+    },
+  ],
+  creditsBalance: 8.5,
+  totalCreditsEarned: 14.0,
+  totalCreditsSpent: 5.5,
+  teachingHours: 14,
+  learningHours: 6,
+  trustScore: {
+    identityVerified: true,
+    skillVerifiedCount: 2,
+    completedSessions: 12,
+    attendanceRate: 100,
+    averageRating: 4.9,
+    cancellationRate: 0,
+    responseRate: 98,
+    accountAgeMonths: 5,
+    overallScore: 96,
+  },
+  streakDays: 8,
+  xpPoints: 950,
+  badges: [
+    {
+      id: 'b-1',
+      title: 'Top Barter Mentor',
+      description: 'Completed 10+ verified sessions',
+      icon: 'Award',
+      category: 'teaching',
+      unlockedAt: '2026-08-01',
+    },
+  ],
+  role: 'user',
+};
+
+export const DEMO_USER_PRIYA: UserProfile = {
+  id: 'user-demo-priya',
+  name: 'Priya Patel',
+  handle: '@priya_design',
+  avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+  headline: 'Lead Product Designer & UX Mentor',
+  bio: 'Hi! I am Priya. I specialize in Figma UI/UX Design and Design Systems, looking to learn Python & AI scripting.',
+  location: 'Mumbai, India',
+  timezone: 'IST (UTC+5:30)',
+  college: 'National Institute of Design (NID)',
+  collegeVerified: true,
+  languages: ['English', 'Hindi'],
+  skillsToTeach: [
+    {
+      skillId: 'teach-uiux-01',
+      skillName: 'UI/UX & Figma',
+      category: 'Design',
+      level: 'Advanced',
+      yearsExperience: 5,
+      verified: true,
+      verificationBadge: 'Verified Peer',
+      hourlyRateInr: 700,
+      hourlyRateCredits: 1.5,
+      proofCount: 10,
+    },
+  ],
+  skillsToLearn: [
+    {
+      skillId: 'learn-python-01',
+      skillName: 'Python & AI',
+      targetLevel: 'Intermediate',
+      urgency: 'urgent',
+      currentRoadmapStep: 1,
+      totalRoadmapSteps: 6,
+      progressPercent: 20,
+    },
+  ],
+  creditsBalance: 6.0,
+  totalCreditsEarned: 11.0,
+  totalCreditsSpent: 5.0,
+  teachingHours: 10,
+  learningHours: 8,
+  trustScore: {
+    identityVerified: true,
+    skillVerifiedCount: 1,
+    completedSessions: 9,
+    attendanceRate: 98,
+    averageRating: 5.0,
+    cancellationRate: 0,
+    responseRate: 100,
+    accountAgeMonths: 4,
+    overallScore: 94,
+  },
+  streakDays: 5,
+  xpPoints: 820,
+  badges: [
+    {
+      id: 'b-2',
+      title: 'Design Virtuoso',
+      description: '5-star design mentor rating',
+      icon: 'Sparkles',
+      category: 'teaching',
+      unlockedAt: '2026-08-05',
+    },
+  ],
+  role: 'user',
+};
 
 const BLANK_GUEST_USER: UserProfile = {
   id: 'guest',
@@ -476,6 +625,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       setIsAuthLoading(false);
     }
+  };
+
+  const loginAsDemoUser = (demoUser: UserProfile) => {
+    setCurrentUser(demoUser);
+    setIsAuthenticated(true);
+    try {
+      localStorage.setItem('skillxchange_active_user', JSON.stringify(demoUser));
+    } catch {}
+    hydrateAllData(demoUser);
+    setAllUsers(prev => {
+      const exists = prev.some(u => u.id === demoUser.id);
+      return exists ? prev : [demoUser, ...prev];
+    });
+    setAuthModalOpen(false);
+    showToast(`Signed in as ${demoUser.name}!`, 'success');
   };
 
   const registerUser = async (
@@ -1663,6 +1827,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openAuthModal,
         closeAuthModal,
         loginUser,
+        loginAsDemoUser,
         registerUser,
         resendVerification,
         logoutUser,

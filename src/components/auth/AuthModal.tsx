@@ -28,7 +28,7 @@ import {
   ShieldCheck,
   Video,
 } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { useApp, DEMO_USER_AARAV, DEMO_USER_PRIYA } from '../../context/AppContext';
 import { isSupabaseConfigured } from '../../lib/supabase/client';
 import { sendPasswordResetEmail, updateUserPassword } from '../../lib/supabase/auth';
 
@@ -70,7 +70,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   initialTab = 'signin',
 }) => {
-  const { loginUser, registerUser, resendVerification, showToast } = useApp();
+  const { loginUser, loginAsDemoUser, registerUser, resendVerification, showToast } = useApp();
   const [tab, setTab] = useState<'signin' | 'signup' | 'forgot' | 'reset_password'>(initialTab);
 
   // Sign In Form State
@@ -300,53 +300,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickDemoLogin = async (demo: {
-    email: string;
-    pass: string;
-    name: string;
-    handle: string;
-    headline: string;
-    teach: string;
-    learn: string;
-    avatar: string;
-  }) => {
-    setSignInEmail(demo.email);
-    setSignInPassword(demo.pass);
+  const handleQuickDemoLogin = (demoUser: typeof DEMO_USER_AARAV) => {
     setLoading(true);
     setErrorMsg(null);
-    try {
-      let res = await loginUser(demo.email, demo.pass);
-      if (!res.success) {
-        // Auto register if account not in Supabase yet
-        const regRes = await registerUser({
-          email: demo.email,
-          password: demo.pass,
-          name: demo.name,
-          handle: demo.handle,
-          headline: demo.headline,
-          teachSkill: demo.teach,
-          learnSkill: demo.learn,
-          avatar: demo.avatar,
-        });
-
-        if (regRes.success) {
-          res = await loginUser(demo.email, demo.pass);
-        }
-      }
-
-      if (res.success) {
-        setSuccessCelebration(true);
-        setTimeout(() => {
-          onClose();
-        }, 800);
-      } else {
-        setErrorMsg(res.error || 'Failed to sign in demo account.');
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Demo login failed.');
-    } finally {
+    loginAsDemoUser(demoUser);
+    setSuccessCelebration(true);
+    setTimeout(() => {
+      onClose();
       setLoading(false);
-    }
+    }, 600);
   };
 
   return (
@@ -682,18 +644,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <button
                       type="button"
                       disabled={loading}
-                      onClick={() =>
-                        handleQuickDemoLogin({
-                          email: 'aarav.sharma@skillexchange.org',
-                          pass: 'Password123!',
-                          name: 'Aarav Sharma',
-                          handle: '@aarav_dev',
-                          headline: 'Full-Stack & Machine Learning Tutor',
-                          teach: 'Python & AI',
-                          learn: 'Guitar & Music Theory',
-                          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-                        })
-                      }
+                      onClick={() => handleQuickDemoLogin(DEMO_USER_AARAV)}
                       className="p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500/60 bg-slate-50/70 hover:bg-emerald-50/40 text-left transition-all group cursor-pointer flex items-center gap-2.5 active:scale-[0.98]"
                     >
                       <img
@@ -718,18 +669,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <button
                       type="button"
                       disabled={loading}
-                      onClick={() =>
-                        handleQuickDemoLogin({
-                          email: 'priya.patel@skillexchange.org',
-                          pass: 'Password123!',
-                          name: 'Priya Patel',
-                          handle: '@priya_design',
-                          headline: 'Lead Product Designer & UX Mentor',
-                          teach: 'UI/UX & Figma',
-                          learn: 'Python & AI',
-                          avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-                        })
-                      }
+                      onClick={() => handleQuickDemoLogin(DEMO_USER_PRIYA)}
                       className="p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500/60 bg-slate-50/70 hover:bg-emerald-50/40 text-left transition-all group cursor-pointer flex items-center gap-2.5 active:scale-[0.98]"
                     >
                       <img
