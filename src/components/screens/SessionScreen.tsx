@@ -266,7 +266,7 @@ export const SessionScreen: React.FC = () => {
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [remoteFrameUrl, setRemoteFrameUrl] = useState<string | null>(null);
-  const [remotePeerInfo, setRemotePeerInfo] = useState<{ id: string; name: string; avatar: string } | null>(null);
+  const [remotePeerInfo, setRemotePeerInfo] = useState<{ id: string; name: string; avatar: string; hasCamera?: boolean } | null>(null);
   const [isSimulatedPeerActive, setIsSimulatedPeerActive] = useState<boolean>(false);
   const [streamEndedInfo, setStreamEndedInfo] = useState<{ peerName: string; time: string } | null>(null);
 
@@ -584,11 +584,12 @@ export const SessionScreen: React.FC = () => {
 
     const handlePeerArrived = async (peerPayload: any) => {
       if (!peerPayload || peerPayload.from === localClientId.current) return;
-      setRemotePeerInfo({
+      setRemotePeerInfo(prev => ({
         id: peerPayload.from,
-        name: peerPayload.name || 'Remote Peer',
-        avatar: peerPayload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-      });
+        name: peerPayload.name || prev?.name || 'Remote Peer',
+        avatar: peerPayload.avatar || prev?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+        hasCamera: typeof peerPayload.hasCamera === 'boolean' ? peerPayload.hasCamera : prev?.hasCamera,
+      }));
 
       const existingPc = peerConnectionsRef.current.get(peerPayload.from);
       if (
@@ -635,6 +636,15 @@ export const SessionScreen: React.FC = () => {
       .on('broadcast', { event: 'peer_ping' }, async ({ payload }) => {
         handlePeerArrived(payload);
       })
+      .on('broadcast', { event: 'peer_status' }, ({ payload }) => {
+        if (!payload || payload.from === localClientId.current) return;
+        setRemotePeerInfo(prev => {
+          if (prev && prev.id === payload.from) {
+            return { ...prev, hasCamera: Boolean(payload.hasCamera) };
+          }
+          return prev;
+        });
+      })
       .on('broadcast', { event: 'peer_leave' }, ({ payload }) => {
         if (!payload || payload.from === localClientId.current) return;
         const leavingPeerId = payload.from;
@@ -662,11 +672,12 @@ export const SessionScreen: React.FC = () => {
         if (payload.to && payload.to !== localClientId.current) return;
 
         if (payload.type === 'sdp_offer') {
-          setRemotePeerInfo({
+          setRemotePeerInfo(prev => ({
             id: payload.from,
-            name: payload.senderName || 'Peer',
-            avatar: payload.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-          });
+            name: payload.senderName || prev?.name || 'Peer',
+            avatar: payload.senderAvatar || prev?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+            hasCamera: typeof payload.hasCamera === 'boolean' ? payload.hasCamera : prev?.hasCamera,
+          }));
           const pc = initPeerConnection(payload.from);
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
@@ -722,11 +733,12 @@ export const SessionScreen: React.FC = () => {
       .on('broadcast', { event: 'video_frame' }, ({ payload }) => {
         if (payload && payload.from !== localClientId.current && payload.frame) {
           setRemoteFrameUrl(payload.frame);
-          setRemotePeerInfo({
+          setRemotePeerInfo(prev => ({
             id: payload.from,
-            name: payload.name || 'Remote Peer',
-            avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-          });
+            name: payload.name || prev?.name || 'Remote Peer',
+            avatar: payload.avatar || prev?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+            hasCamera: true,
+          }));
         }
       })
       .on('broadcast', { event: 'emoji_reaction' }, ({ payload }) => {
@@ -743,6 +755,7 @@ export const SessionScreen: React.FC = () => {
               from: localClientId.current,
               name: currentUser.name,
               avatar: currentUser.avatar,
+              hasCamera: isCameraActive,
             },
           });
         }
@@ -758,6 +771,7 @@ export const SessionScreen: React.FC = () => {
             from: localClientId.current,
             name: currentUser.name,
             avatar: currentUser.avatar,
+            hasCamera: isCameraActive,
           },
         });
       }
@@ -774,6 +788,22 @@ export const SessionScreen: React.FC = () => {
       peerConnectionsRef.current.clear();
     };
   }, [sessionView, activeMeeting.roomCode]);
+
+  // Broadcast peer_status immediately when camera toggles
+  useEffect(() => {
+    if (realtimeChannelRef.current && sessionView === 'live_meeting') {
+      try {
+        realtimeChannelRef.current.send({
+          type: 'broadcast',
+          event: 'peer_status',
+          payload: {
+            from: localClientId.current,
+            hasCamera: isCameraActive,
+          },
+        });
+      } catch {}
+    }
+  }, [isCameraActive, sessionView]);
 
   // Live Canvas Video Frame Broadcaster (Bulletproof Fallback across any NAT/Firewall)
   useEffect(() => {
@@ -1716,6 +1746,37 @@ export const SessionScreen: React.FC = () => {
                       </button>
                     </div>
                   </div>
+                ) : remotePeerInfo ? (
+                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3.5 p-4 text-center animate-fade-in">
+                    <img
+                      src={remotePeerInfo.avatar}
+                      alt={remotePeerInfo.name}
+                      className="w-20 sm:w-28 h-20 sm:h-28 rounded-full object-cover border-4 border-emerald-500/40 shadow-2xl"
+                    />
+                    <div className="space-y-1">
+                      <div className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-200 text-xs font-mono-ledger font-bold inline-flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${remotePeerInfo.hasCamera ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`}></span>
+                        <span>{remotePeerInfo.name} Connected</span>
+                        <span className="text-slate-500">•</span>
+                        <span className={remotePeerInfo.hasCamera ? 'text-emerald-400' : 'text-amber-400'}>
+                          {remotePeerInfo.hasCamera ? 'Connecting Video Feed...' : 'Camera Turned Off'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto font-mono-ledger">
+                        {remotePeerInfo.hasCamera ? 'Negotiating 1080p stream with remote device...' : 'Peer is in the session with camera turned off.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={copyMeetLink}
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono-ledger font-bold border border-slate-600 transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Copy Room Link</span>
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3.5 p-4 text-center">
                     <img
@@ -1810,6 +1871,14 @@ export const SessionScreen: React.FC = () => {
                       >
                         Return to Lobby
                       </button>
+                    </div>
+                  ) : remotePeerInfo ? (
+                    <div className="text-center space-y-2 p-2 animate-fade-in">
+                      <img src={remotePeerInfo.avatar} alt={remotePeerInfo.name} className="w-16 h-16 rounded-full object-cover border-2 border-emerald-400 mx-auto" />
+                      <p className="text-xs font-bold text-white">{remotePeerInfo.name}</p>
+                      <p className="text-[10px] font-mono-ledger text-amber-400">
+                        {remotePeerInfo.hasCamera ? 'Connecting Video Feed...' : 'Connected (Camera Off)'}
+                      </p>
                     </div>
                   ) : (
                     <div className="text-center space-y-2 p-2">
