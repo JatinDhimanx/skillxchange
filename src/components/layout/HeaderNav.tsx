@@ -383,24 +383,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
                       </div>
                     </div>
 
-                    {allUsers.length > 1 && (
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-mono-ledger font-bold uppercase tracking-wider text-slate-400 px-1">Other Peers in Network</span>
-                        {allUsers.filter(u => u.id !== currentUser.id && u.role !== 'admin').slice(0, 3).map(user => (
-                          <button
-                            key={user.id}
-                            onClick={() => { switchUser(user.id); setShowPersonaDropdown(false); }}
-                            className="w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-all text-xs hover:bg-slate-50 text-slate-700"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <img src={user.avatar} alt={user.name} className="w-6 h-6 rounded-full object-cover shrink-0" />
-                              <p className="font-semibold text-slate-800 text-xs truncate">{user.name}</p>
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-mono-ledger">Switch</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+
 
                     <div className="pt-2 border-t border-slate-100 space-y-1">
                       <button

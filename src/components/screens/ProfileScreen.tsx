@@ -83,62 +83,64 @@ export const ProfileScreen: React.FC = () => {
   }, []);
 
   return (
-    <div className="py-6 max-w-[1180px] mx-auto px-4 space-y-8">
+    <div className="py-6 max-w-5xl w-full mx-auto px-3 sm:px-6 space-y-6 sm:space-y-8 overflow-hidden">
       {/* Header Card on Clean White */}
-      <div className="paper-card p-6 sm:p-10 shadow-sm relative overflow-hidden space-y-4 bg-white border border-slate-200">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
+      <div className="paper-card p-5 sm:p-8 rounded-3xl shadow-sm relative overflow-hidden space-y-4 bg-white border border-slate-200">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="flex items-center gap-4 sm:gap-5 min-w-0 flex-1">
             {/* Avatar Circle */}
             <div className="relative shrink-0">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-tr from-amber-400 via-slate-100 to-emerald-400 p-1 flex items-center justify-center shadow-md">
+              <div className="w-16 h-16 sm:w-22 sm:h-22 rounded-3xl bg-gradient-to-tr from-amber-400 via-slate-100 to-emerald-400 p-1 flex items-center justify-center shadow-md">
                 <img
                   src={currentUser.avatar}
                   alt={currentUser.name}
-                  className="w-full h-full rounded-full object-cover border border-slate-200"
+                  className="w-full h-full rounded-2xl object-cover border border-slate-200"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h1 className="font-display font-bold text-2xl sm:text-3xl text-slate-900">
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="font-display font-bold text-xl sm:text-2xl text-slate-900 truncate">
                   {currentUser.name}
                 </h1>
-                <span className="font-mono-ledger text-xs text-slate-500">
+                <span className="font-mono-ledger text-xs text-slate-500 truncate">
                   {currentUser.handle}
                 </span>
                 {currentUser.collegeVerified && (
                   <span title="Verified Campus Member">
-                    <GraduationCap className="w-4 h-4 text-emerald-600" />
+                    <GraduationCap className="w-4 h-4 text-emerald-600 shrink-0" />
                   </span>
                 )}
                 <button
                   onClick={() => setShowEditBioModal(true)}
-                  className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+                  className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                   title="Edit Headline and Bio"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className="text-xs sm:text-sm text-slate-700 max-w-xl font-sans">
+              <p className="text-xs sm:text-sm text-slate-700 font-sans line-clamp-2 break-words">
                 {currentUser.headline}
               </p>
-              <p className="text-xs text-slate-500 font-sans max-w-xl">
-                {currentUser.bio}
-              </p>
-              <div className="flex flex-wrap items-center gap-3 pt-1 text-xs font-mono-ledger text-slate-500">
+              {currentUser.bio && (
+                <p className="text-xs text-slate-500 font-sans line-clamp-2 break-words">
+                  {currentUser.bio}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-mono-ledger text-slate-500">
                 <span>{currentUser.location}</span>
                 <span>•</span>
-                <span>{currentUser.languages.join(', ')}</span>
+                <span className="truncate">{currentUser.languages.join(', ')}</span>
                 <span>•</span>
                 <span className="font-bold text-slate-800">{currentUser.trustScore.completedSessions} sessions</span>
               </div>
             </div>
           </div>
 
-          {/* Rotated Trust Score Stamp */}
-          <div className="shrink-0 self-end sm:self-center">
-            <div className="trust-score-stamp text-xs sm:text-sm shadow-xs">
+          {/* Trust Score Stamp */}
+          <div className="shrink-0 self-start sm:self-center">
+            <div className="trust-score-stamp text-[11px] sm:text-xs shadow-xs font-mono-ledger font-bold">
               ★ {currentUser.trustScore.overallScore}/100 TRUST VERIFIED
             </div>
           </div>
