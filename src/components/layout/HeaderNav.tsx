@@ -123,8 +123,18 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
           {/* ── BRAND ─────────────────────────────── */}
           <div
             onClick={() => handleTabClick('home')}
-            className="flex items-center cursor-pointer select-none shrink-0 group"
+            className="flex items-center gap-2.5 cursor-pointer select-none shrink-0 group"
           >
+            {/* Custom Brand Logo Image: Aap yaha apni image ka URL ya path daal sakte hain (e.g. src="/logo.png") */}
+            <img
+              src="/logo.png"
+              alt="SkillXchange Logo"
+              onError={e => {
+                // If logo.png doesn't exist yet, hide broken icon gracefully
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+              className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-lg shrink-0"
+            />
             <span className="font-display font-black text-lg sm:text-xl text-slate-900 tracking-tight whitespace-nowrap group-hover:opacity-90 transition-opacity">
               Skill<span className="text-amber-600">X</span>change
             </span>
