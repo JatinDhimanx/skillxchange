@@ -257,7 +257,7 @@ const MainAppContent: React.FC = () => {
       {/* Global AI Skill Discovery FAB */}
       <button
         onClick={() => setIsGlobalDiscoveryOpen(true)}
-        className="fixed bottom-6 right-6 z-[60] flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-full shadow-lg hover:shadow-orange-500/40 hover:-translate-y-1 transition-all group"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[60] flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-full shadow-lg hover:shadow-orange-500/40 hover:-translate-y-1 transition-all group"
       >
         <Sparkles className="w-6 h-6 text-white group-hover:rotate-12 transition-transform" />
       </button>

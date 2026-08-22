@@ -344,7 +344,9 @@ export const AISkillDiscoveryModal: React.FC<AISkillDiscoveryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-24 right-6 z-[70] w-[calc(100vw-3rem)] sm:w-[450px] h-[600px] max-h-[calc(100vh-8rem)] bg-white rounded-3xl shadow-2xl border-2 border-amber-500/20 flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 fade-in duration-300 origin-bottom-right">
+    <div className="fixed z-[70] flex flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-bottom-10 fade-in duration-300 origin-bottom-right 
+      bottom-0 left-0 right-0 w-full h-[85vh] rounded-t-3xl border-t-2 border-amber-500/30 
+      sm:bottom-24 sm:right-6 sm:left-auto sm:w-[450px] sm:h-[600px] sm:max-h-[calc(100vh-8rem)] sm:rounded-3xl sm:border-2 sm:border-amber-500/20">
       {/* Top Header */}
         <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-amber-950 text-white flex items-center justify-between border-b border-slate-700/50">
           <div className="flex items-center gap-3">
