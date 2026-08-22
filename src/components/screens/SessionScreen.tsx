@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase/client';
+import { supabase } from '../../lib/supabase/client';
 import {
   Mic,
   MicOff,
@@ -10,47 +10,23 @@ import {
   VideoOff,
   Share2,
   Edit3,
-  FileText,
   Send,
   Sparkles,
-  Trash2,
   CheckCircle2,
   Award,
-  Clock,
-  ShieldCheck,
   Code,
   Play,
   Download,
-  Square,
-  Circle,
-  HelpCircle,
-  ThumbsUp,
-  Flame,
-  Lightbulb,
-  Rocket,
   Star,
-  RefreshCw,
   Copy,
-  BookOpen,
-  Volume2,
-  Terminal,
-  Layers,
-  ChevronRight,
   Maximize2,
   Users,
   PlusCircle,
   Radio,
   Hand,
   MessageSquare,
-  ExternalLink,
   PhoneOff,
-  Settings,
-  Grid,
-  Info,
-  Calendar,
-  Lock,
   ArrowRight,
-  Check,
   Search
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -156,28 +132,21 @@ export const SessionScreen: React.FC = () => {
     activeSession,
     startLiveSession,
     endLiveSession,
-    releaseEscrow,
-    recordSpeechSnippet,
-    softSkillMetrics,
     generateNewCredentialBlock,
     showToast,
   } = useApp();
 
-  // Mode: 'lobby' (choose Create / Attend) vs 'live_meeting' (Google Meet streaming studio)
   const [sessionView, setSessionView] = useState<'lobby' | 'live_meeting'>('lobby');
   const [lobbyTab, setLobbyTab] = useState<'attend' | 'create'>('attend');
 
-  // Lobby: Attend search / join code
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Lobby: Create Room Form State
   const [newRoomTopic, setNewRoomTopic] = useState('');
-  const [newRoomSkill, setNewRoomSkill] = useState(currentUser?.skillsToTeach[0]?.skillName || 'Python & Data Science');
+  const [newRoomSkill, setNewRoomSkill] = useState(currentUser?.skillsToTeach?.[0]?.skillName || 'Python & Data Science');
   const [newRoomType, setNewRoomType] = useState<'1on1' | 'open_broadcast'>('1on1');
   const [generatedRoomCode, setGeneratedRoomCode] = useState(`ROOM-${Math.floor(1000 + Math.random() * 9000)}`);
 
-  // Active Meeting Metadata
   const [activeMeeting, setActiveMeeting] = useState<{
     id: string;
     roomCode: string;
@@ -196,15 +165,12 @@ export const SessionScreen: React.FC = () => {
     isHost: false,
   });
 
-  // Dynamic list of available classes to attend (derived from all registered users / instructors)
   const availableClasses: LiveClassItem[] = React.useMemo(() => {
     const list: LiveClassItem[] = [];
+    const otherUsers = (allUsers || []).filter(u => u.id !== currentUser?.id && u.role !== 'admin');
 
-    // Derive classes from other registered users
-    const otherUsers = allUsers.filter(u => u.id !== currentUser.id && u.role !== 'admin');
-    
     otherUsers.forEach((u, i) => {
-      const teachSkill = u.skillsToTeach[0]?.skillName || 'General Skills';
+      const teachSkill = u.skillsToTeach?.[0]?.skillName || 'General Skills';
       list.push({
         id: `class-${u.id}-${i}`,
         roomCode: `MEET-${u.name.slice(0, 3).toUpperCase()}-${100 + i}`,
@@ -220,7 +186,6 @@ export const SessionScreen: React.FC = () => {
       });
     });
 
-    // Fallback featured room if no other users registered yet
     if (list.length === 0) {
       list.push({
         id: 'class-featured-python',
@@ -240,8 +205,7 @@ export const SessionScreen: React.FC = () => {
     return list;
   }, [allUsers, currentUser]);
 
-  // Elapsed Timer
-  const [seconds, setSeconds] = useState(1425); // 23m 45s
+  const [seconds, setSeconds] = useState(1425);
   useEffect(() => {
     if (sessionView !== 'live_meeting') return;
     const timer = setInterval(() => {
@@ -256,7 +220,7 @@ export const SessionScreen: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ── MEDIA STREAMS & WEBRTC P2P ────────────────────────────────
+  // ── MEDIA STREAMS & WEBRTC P2P REFS ──
   const videoStageContainerRef = useRef<HTMLDivElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -275,16 +239,11 @@ export const SessionScreen: React.FC = () => {
   const [handRaised, setHandRaised] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
-  const [audioLevel, setAudioLevel] = useState<number>(35);
 
-  // Map of peerClientId -> RTCPeerConnection. Using a Map (instead of a single ref)
-  // means a peer's connection is only ever created ONCE and reused for its lifetime,
-  // instead of being torn down and rebuilt on every heartbeat/track update.
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const iceCandidatesQueue = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const realtimeChannelRef = useRef<any>(null);
   const localClientId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`);
-  // Always-current mirror of mediaStream, readable from inside stable (non-recreated)
-  // effects/callbacks without needing mediaStream in their dependency arrays.
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const ICE_SERVERS: RTCConfiguration = {
@@ -306,7 +265,6 @@ export const SessionScreen: React.FC = () => {
     iceCandidatePoolSize: 10,
   };
 
-  // Fullscreen sync listener
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(Boolean(document.fullscreenElement));
@@ -323,10 +281,8 @@ export const SessionScreen: React.FC = () => {
     }
   };
 
-  // In-Call Side Panel: 'chat' | 'whiteboard' | 'code' | 'copilot' | 'people' | null
   const [activeSidePanel, setActiveSidePanel] = useState<'chat' | 'whiteboard' | 'code' | 'copilot' | 'people' | null>('copilot');
 
-  // Launch Live Meeting from Lobby (as Attendee or as Host)
   const handleJoinClass = (cls: LiveClassItem) => {
     setActiveMeeting({
       id: cls.id,
@@ -358,7 +314,7 @@ export const SessionScreen: React.FC = () => {
         id: `room-${Date.now()}`,
         roomCode: code,
         topic: `Live Study Session [${code}]`,
-        skill: currentUser.skillsToLearn[0]?.skillName || 'General Skills',
+        skill: currentUser?.skillsToLearn?.[0]?.skillName || 'General Skills',
         instructorName: 'Peer Mentor',
         instructorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
         isHost: false,
@@ -369,7 +325,6 @@ export const SessionScreen: React.FC = () => {
     }
   };
 
-  // Auto-join if ?room= query param is present in URL
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -397,7 +352,6 @@ export const SessionScreen: React.FC = () => {
     }
   }, []);
 
-  // Auto-connect to live_meeting when activeSession is updated from context
   useEffect(() => {
     if (activeSession && activeSession.roomCode) {
       setActiveMeeting({
@@ -407,13 +361,13 @@ export const SessionScreen: React.FC = () => {
         skill: activeSession.skillName,
         instructorName: activeSession.teacherName,
         instructorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-        isHost: activeSession.teacherName === currentUser.name,
+        isHost: activeSession.teacherName === currentUser?.name,
       });
       setSessionView('live_meeting');
     }
   }, [activeSession]);
 
-  // Auto-start camera when entering live_meeting
+  // Media Capture Setup
   useEffect(() => {
     let activeStream: MediaStream | null = null;
     if (sessionView === 'live_meeting' && !mediaStream) {
@@ -423,6 +377,7 @@ export const SessionScreen: React.FC = () => {
       }).then(stream => {
         activeStream = stream;
         setMediaStream(stream);
+        mediaStreamRef.current = stream;
         setIsCameraActive(true);
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
@@ -430,7 +385,7 @@ export const SessionScreen: React.FC = () => {
         }
         showToast('Webcam and audio stream connected!', 'success');
       }).catch(err => {
-        console.warn('Webcam permission not granted or prompt dismissed:', err);
+        console.warn('Webcam permission not granted:', err);
       });
     }
     return () => {
@@ -440,7 +395,6 @@ export const SessionScreen: React.FC = () => {
     };
   }, [sessionView]);
 
-  // Keep localVideoRef attached to stream on view updates
   useEffect(() => {
     if (localVideoRef.current && mediaStream && isCameraActive) {
       localVideoRef.current.srcObject = mediaStream;
@@ -448,7 +402,6 @@ export const SessionScreen: React.FC = () => {
     }
   }, [mediaStream, isCameraActive, sessionView, viewMode]);
 
-  // Keep remoteVideoRef and hostVideoRef attached to remoteStream
   useEffect(() => {
     if (remoteStream) {
       if (remoteVideoRef.current) {
@@ -462,13 +415,7 @@ export const SessionScreen: React.FC = () => {
     }
   }, [remoteStream, sessionView, viewMode, isScreenSharing]);
 
-  // ── WEBRTC P2P MULTI-DEVICE SIGNALING VIA SUPABASE REALTIME ──
-  // NOTE: this effect intentionally does NOT depend on `mediaStream`. It only
-  // depends on sessionView/roomCode, so the Realtime channel and any existing
-  // peer connections are never torn down just because the local camera stream
-  // changed — that was the root cause of "only my own video shows, never the
-  // other person's". Local tracks are pushed into already-open connections by
-  // the separate effect further below.
+  // ── P2P WEBRTC SIGNALING (ROBUST WITH QUEUED CANDIDATES) ──
   useEffect(() => {
     if (sessionView !== 'live_meeting' || !supabase) return;
 
@@ -478,50 +425,66 @@ export const SessionScreen: React.FC = () => {
     });
     realtimeChannelRef.current = channel;
     const pcMap = peerConnectionsRef.current;
+    const candidateQueues = iceCandidatesQueue.current;
 
     const attachLocalTracks = (pc: RTCPeerConnection) => {
       const stream = mediaStreamRef.current;
       if (!stream) return;
-      const existingTrackIds = new Set(pc.getSenders().map(s => s.track?.id).filter(Boolean));
+      const senders = pc.getSenders();
       stream.getTracks().forEach(track => {
-        if (!existingTrackIds.has(track.id)) {
+        const exists = senders.some(s => s.track?.id === track.id);
+        if (!exists) {
           try {
             pc.addTrack(track, stream);
-          } catch {}
+          } catch (err) {
+            console.error('Track attach failed:', err);
+          }
         }
       });
+    };
+
+    const flushIceCandidates = async (peerId: string, pc: RTCPeerConnection) => {
+      const queue = candidateQueues.get(peerId) || [];
+      while (queue.length > 0) {
+        const candidate = queue.shift();
+        if (candidate) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (e) {
+            console.warn('Could not add queued ICE candidate:', e);
+          }
+        }
+      }
     };
 
     const closeAndRemovePeer = (peerId: string) => {
       const pc = pcMap.get(peerId);
       if (pc) {
-        try {
-          pc.close();
-        } catch {}
+        try { pc.close(); } catch {}
         pcMap.delete(peerId);
       }
+      candidateQueues.delete(peerId);
       setRemotePeerInfo(prev => (prev && prev.id === peerId ? null : prev));
       setRemoteStream(prev => (pcMap.size === 0 ? null : prev));
       setRemoteFrameUrl(prev => (pcMap.size === 0 ? null : prev));
     };
 
-    // Get the existing connection for a peer if it's still usable, otherwise
-    // create a brand-new one. A peer's connection is created AT MOST ONCE per
-    // call session — never recreated on every heartbeat/ping.
     const getOrCreatePeerConnection = (targetClientId: string): RTCPeerConnection => {
       const existing = pcMap.get(targetClientId);
       if (existing && existing.connectionState !== 'closed' && existing.connectionState !== 'failed') {
         return existing;
       }
       if (existing) {
-        try {
-          existing.close();
-        } catch {}
+        try { existing.close(); } catch {}
         pcMap.delete(targetClientId);
       }
 
       const pc = new RTCPeerConnection(ICE_SERVERS);
       pcMap.set(targetClientId, pc);
+      if (!candidateQueues.has(targetClientId)) {
+        candidateQueues.set(targetClientId, []);
+      }
+
       attachLocalTracks(pc);
 
       pc.onicecandidate = event => {
@@ -533,24 +496,22 @@ export const SessionScreen: React.FC = () => {
               type: 'ice_candidate',
               from: localClientId.current,
               to: targetClientId,
-              candidate: event.candidate,
+              candidate: event.candidate.toJSON(),
             },
           });
         }
       };
 
       pc.ontrack = event => {
-        if (event.streams && event.streams[0]) {
-          const stream = event.streams[0];
-          setRemoteStream(stream);
-          if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = stream;
-            remoteVideoRef.current.play().catch(() => {});
-          }
-          if (hostVideoRef.current && !isScreenSharing) {
-            hostVideoRef.current.srcObject = stream;
-            hostVideoRef.current.play().catch(() => {});
-          }
+        const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+        setRemoteStream(stream);
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = stream;
+          remoteVideoRef.current.play().catch(() => {});
+        }
+        if (hostVideoRef.current && !isScreenSharing) {
+          hostVideoRef.current.srcObject = stream;
+          hostVideoRef.current.play().catch(() => {});
         }
       };
 
@@ -560,84 +521,44 @@ export const SessionScreen: React.FC = () => {
         }
       };
 
-      // Fires automatically whenever a track is added to an already-negotiated
-      // connection (e.g. camera turned on after the call already started).
-      // This is what lets a late-starting camera reach the other device
-      // without rebuilding the whole connection.
-      pc.onnegotiationneeded = async () => {
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          channel.send({
-            type: 'broadcast',
-            event: 'webrtc_signal',
-            payload: {
-              type: 'sdp_offer',
-              from: localClientId.current,
-              to: targetClientId,
-              sdp: offer,
-              senderName: currentUser.name,
-              senderAvatar: currentUser.avatar,
-            },
-          });
-        } catch (err) {
-          console.error('Renegotiation failed:', err);
-        }
-      };
-
       return pc;
     };
 
-    const handlePeerArrived = async (peerPayload: any) => {
-      if (!peerPayload || peerPayload.from === localClientId.current) return;
-      setRemotePeerInfo(prev => prev ?? {
-        id: peerPayload.from,
-        name: peerPayload.name || 'Remote Peer',
-        avatar: peerPayload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-      });
+    const sendOffer = async (targetClientId: string) => {
+      const pc = getOrCreatePeerConnection(targetClientId);
+      try {
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+        await pc.setLocalDescription(offer);
 
-      // Already connected (or in the middle of connecting) to this peer —
-      // do NOT recreate the connection. This is what stopped the previous
-      // "reconnect every ~2.5s" behaviour caused by the heartbeat.
-      const existing = pcMap.get(peerPayload.from);
-      if (existing && existing.connectionState !== 'closed' && existing.connectionState !== 'failed') {
-        return;
-      }
-
-      // Deterministic initiator: the client with the larger ID creates the offer
-      const shouldInitiate = localClientId.current > peerPayload.from;
-      if (shouldInitiate) {
-        const pc = getOrCreatePeerConnection(peerPayload.from);
-        try {
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true,
-          });
-          await pc.setLocalDescription(offer);
-          channel.send({
-            type: 'broadcast',
-            event: 'webrtc_signal',
-            payload: {
-              type: 'sdp_offer',
-              from: localClientId.current,
-              to: peerPayload.from,
-              sdp: offer,
-              senderName: currentUser.name,
-              senderAvatar: currentUser.avatar,
-            },
-          });
-        } catch (err) {
-          console.error('Failed to create offer:', err);
-        }
+        channel.send({
+          type: 'broadcast',
+          event: 'webrtc_signal',
+          payload: {
+            type: 'sdp_offer',
+            from: localClientId.current,
+            to: targetClientId,
+            sdp: offer,
+            senderName: currentUser?.name || 'Peer',
+            senderAvatar: currentUser?.avatar || '',
+          },
+        });
+      } catch (err) {
+        console.error('Failed to create offer:', err);
       }
     };
 
     channel
       .on('broadcast', { event: 'peer_join' }, async ({ payload }) => {
-        handlePeerArrived(payload);
-      })
-      .on('broadcast', { event: 'peer_ping' }, async ({ payload }) => {
-        handlePeerArrived(payload);
+        if (!payload || payload.from === localClientId.current) return;
+        setRemotePeerInfo({
+          id: payload.from,
+          name: payload.name || 'Remote Peer',
+          avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+        });
+        sendOffer(payload.from);
       })
       .on('broadcast', { event: 'peer_leave' }, ({ payload }) => {
         if (payload && payload.from) {
@@ -648,33 +569,35 @@ export const SessionScreen: React.FC = () => {
         if (!payload || payload.from === localClientId.current) return;
         if (payload.to && payload.to !== localClientId.current) return;
 
+        const peerId = payload.from;
+        const pc = getOrCreatePeerConnection(peerId);
+
         if (payload.type === 'sdp_offer') {
           setRemotePeerInfo(prev => prev ?? {
             id: payload.from,
             name: payload.senderName || 'Peer',
             avatar: payload.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
           });
-          // Reuse the existing connection if we already have one (handles both
-          // the initial offer AND later renegotiation offers on the same call).
-          const pc = getOrCreatePeerConnection(payload.from);
+
           try {
             if (pc.signalingState !== 'stable') {
-              // Offer collision (glare) — roll back our own pending local offer
-              // and accept theirs instead.
-              try {
-                await pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit);
-              } catch {}
+              await Promise.all([
+                pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit).catch(() => {}),
+              ]);
             }
             await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            await flushIceCandidates(peerId, pc);
+
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
+
             channel.send({
               type: 'broadcast',
               event: 'webrtc_signal',
               payload: {
                 type: 'sdp_answer',
                 from: localClientId.current,
-                to: payload.from,
+                to: peerId,
                 sdp: answer,
               },
             });
@@ -682,21 +605,26 @@ export const SessionScreen: React.FC = () => {
             console.error('Error handling SDP offer:', err);
           }
         } else if (payload.type === 'sdp_answer') {
-          const pc = pcMap.get(payload.from);
-          if (pc) {
-            try {
+          try {
+            if (pc.signalingState === 'have-local-offer') {
               await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-            } catch (err) {
-              console.error('Error handling SDP answer:', err);
+              await flushIceCandidates(peerId, pc);
             }
+          } catch (err) {
+            console.error('Error handling SDP answer:', err);
           }
         } else if (payload.type === 'ice_candidate') {
-          const pc = pcMap.get(payload.from);
-          if (pc && payload.candidate) {
-            try {
-              await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
-            } catch (err) {
-              console.error('Error adding ICE candidate:', err);
+          if (payload.candidate) {
+            if (pc.remoteDescription && pc.remoteDescription.type) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+              } catch (err) {
+                console.error('Error adding ICE candidate:', err);
+              }
+            } else {
+              const queue = candidateQueues.get(peerId) || [];
+              queue.push(payload.candidate);
+              candidateQueues.set(peerId, queue);
             }
           }
         }
@@ -727,7 +655,7 @@ export const SessionScreen: React.FC = () => {
       })
       .on('broadcast', { event: 'emoji_reaction' }, ({ payload }) => {
         if (payload && payload.from !== localClientId.current) {
-          triggerReaction(payload.emoji);
+          triggerReaction(payload.emoji, false);
         }
       })
       .subscribe(status => {
@@ -737,32 +665,14 @@ export const SessionScreen: React.FC = () => {
             event: 'peer_join',
             payload: {
               from: localClientId.current,
-              name: currentUser.name,
-              avatar: currentUser.avatar,
+              name: currentUser?.name || 'Peer',
+              avatar: currentUser?.avatar || '',
             },
           });
         }
       });
 
-    // Heartbeat only DISCOVERS peers that haven't connected yet — it no longer
-    // tears down or recreates connections that already exist (see
-    // handlePeerArrived's early-return above).
-    const pingInterval = setInterval(() => {
-      if (channel) {
-        channel.send({
-          type: 'broadcast',
-          event: 'peer_ping',
-          payload: {
-            from: localClientId.current,
-            name: currentUser.name,
-            avatar: currentUser.avatar,
-          },
-        });
-      }
-    }, 2500);
-
     return () => {
-      clearInterval(pingInterval);
       channel.send({
         type: 'broadcast',
         event: 'peer_leave',
@@ -770,11 +680,10 @@ export const SessionScreen: React.FC = () => {
       });
       channel.unsubscribe();
       pcMap.forEach(pc => {
-        try {
-          pc.close();
-        } catch {}
+        try { pc.close(); } catch {}
       });
       pcMap.clear();
+      candidateQueues.clear();
       realtimeChannelRef.current = null;
       setRemoteStream(null);
       setRemoteFrameUrl(null);
@@ -782,18 +691,13 @@ export const SessionScreen: React.FC = () => {
     };
   }, [sessionView, activeMeeting.roomCode]);
 
-  // Keep mediaStreamRef in sync, and push any new local tracks into peer
-  // connections that already exist (e.g. camera finished loading async, or was
-  // toggled on mid-call). Adding tracks to an already-connected RTCPeerConnection
-  // automatically fires onnegotiationneeded above, which renegotiates without
-  // rebuilding the connection from scratch.
   useEffect(() => {
     mediaStreamRef.current = mediaStream;
     if (!mediaStream) return;
     peerConnectionsRef.current.forEach(pc => {
-      const existingTrackIds = new Set(pc.getSenders().map(s => s.track?.id).filter(Boolean));
+      const existing = new Set(pc.getSenders().map(s => s.track?.id).filter(Boolean));
       mediaStream.getTracks().forEach(track => {
-        if (!existingTrackIds.has(track.id)) {
+        if (!existing.has(track.id)) {
           try {
             pc.addTrack(track, mediaStream);
           } catch {}
@@ -802,9 +706,7 @@ export const SessionScreen: React.FC = () => {
     });
   }, [mediaStream]);
 
-  // Live Canvas Video Frame Broadcaster (Bulletproof Fallback across any NAT/Firewall).
-  // Kept fully independent of the WebRTC lifecycle above so a temporary WebRTC
-  // hiccup never also kills this fallback at the same moment.
+  // Frame Broadcaster Fallback
   useEffect(() => {
     if (sessionView !== 'live_meeting' || !isCameraActive) return;
 
@@ -825,8 +727,8 @@ export const SessionScreen: React.FC = () => {
                 event: 'video_frame',
                 payload: {
                   from: localClientId.current,
-                  name: currentUser.name,
-                  avatar: currentUser.avatar,
+                  name: currentUser?.name,
+                  avatar: currentUser?.avatar,
                   frame: frameBase64,
                 },
               });
@@ -847,12 +749,12 @@ export const SessionScreen: React.FC = () => {
       roomCode: generatedRoomCode,
       topic,
       skill: newRoomSkill,
-      instructorName: currentUser.name,
-      instructorAvatar: currentUser.avatar,
+      instructorName: currentUser?.name || 'Host',
+      instructorAvatar: currentUser?.avatar || '',
       isHost: true,
     });
     setSessionView('live_meeting');
-    startLiveSession(topic, currentUser.name, 'Live Attendees', newRoomSkill);
+    startLiveSession(topic, currentUser?.name, 'Live Attendees', newRoomSkill);
     showToast(`Live Study Room [${generatedRoomCode}] broadcast is now ACTIVE!`, 'success');
   };
 
@@ -865,13 +767,7 @@ export const SessionScreen: React.FC = () => {
     showToast(`Meeting link copied: ${link}`, 'success');
   };
 
-  // Toggle Camera
   const toggleCamera = async () => {
-    // A stream already exists (even if currently paused/disabled) — just
-    // flip the existing video tracks instead of requesting a brand-new
-    // getUserMedia stream. Requesting a second stream while the first still
-    // exists can leak the old stream, trigger unnecessary renegotiation, and
-    // on some browsers fail outright because the camera device is still busy.
     if (mediaStream) {
       const newEnabled = !isCameraActive;
       mediaStream.getVideoTracks().forEach(t => {
@@ -886,6 +782,7 @@ export const SessionScreen: React.FC = () => {
           audio: true,
         });
         setMediaStream(stream);
+        mediaStreamRef.current = stream;
         setIsCameraActive(true);
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
@@ -894,12 +791,11 @@ export const SessionScreen: React.FC = () => {
         showToast('Webcam stream connected!', 'success');
       } catch (err: any) {
         setIsCameraActive(false);
-        showToast('Webcam permission not granted. Switched to avatar.', 'warning');
+        showToast('Webcam permission not granted.', 'warning');
       }
     }
   };
 
-  // Screen Share
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
       setIsScreenSharing(false);
@@ -921,7 +817,6 @@ export const SessionScreen: React.FC = () => {
     }
   };
 
-  // Cleanup stream
   useEffect(() => {
     return () => {
       if (mediaStream) {
@@ -930,9 +825,9 @@ export const SessionScreen: React.FC = () => {
     };
   }, [mediaStream]);
 
-  // Floating Emoji Reactions
+  // Reactions
   const [floatingReactions, setFloatingReactions] = useState<{ id: string; emoji: string; left: number }[]>([]);
-  const triggerReaction = (emoji: string) => {
+  const triggerReaction = (emoji: string, broadcast = true) => {
     const newId = `${Date.now()}-${Math.random()}`;
     const leftPos = 20 + Math.random() * 60;
     setFloatingReactions(prev => [...prev, { id: newId, emoji, left: leftPos }]);
@@ -940,8 +835,7 @@ export const SessionScreen: React.FC = () => {
       setFloatingReactions(prev => prev.filter(r => r.id !== newId));
     }, 2000);
 
-    // Broadcast emoji to other device
-    if (realtimeChannelRef.current) {
+    if (broadcast && realtimeChannelRef.current) {
       realtimeChannelRef.current.send({
         type: 'broadcast',
         event: 'emoji_reaction',
@@ -953,7 +847,7 @@ export const SessionScreen: React.FC = () => {
     }
   };
 
-  // ── IN-CALL CHAT ──────────────────────────────────────────────
+  // Chat
   const [inCallMessages, setInCallMessages] = useState<{ sender: string; avatar: string; text: string; time: string; isMe: boolean }[]>([
     {
       sender: activeMeeting.instructorName,
@@ -978,8 +872,8 @@ export const SessionScreen: React.FC = () => {
     const textStr = inCallInput.trim();
 
     const newMsg = {
-      sender: currentUser.name,
-      avatar: currentUser.avatar,
+      sender: currentUser?.name || 'User',
+      avatar: currentUser?.avatar || '',
       text: textStr,
       time: timeStr,
       isMe: true,
@@ -987,15 +881,14 @@ export const SessionScreen: React.FC = () => {
     setInCallMessages(prev => [...prev, newMsg]);
     setInCallInput('');
 
-    // Broadcast chat message to other device
     if (realtimeChannelRef.current) {
       realtimeChannelRef.current.send({
         type: 'broadcast',
         event: 'chat_msg',
         payload: {
           from: localClientId.current,
-          sender: currentUser.name,
-          avatar: currentUser.avatar,
+          sender: currentUser?.name,
+          avatar: currentUser?.avatar,
           text: textStr,
           time: timeStr,
         },
@@ -1003,12 +896,12 @@ export const SessionScreen: React.FC = () => {
     }
   };
 
-  // ── WHITEBOARD CANVAS ─────────────────────────────────────────
+  // Whiteboard
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [tool, setTool] = useState<'pen' | 'highlighter' | 'eraser'>('pen');
   const [penColor, setPenColor] = useState('#0F172A');
-  const [brushSize, setBrushSize] = useState(3);
+  const [brushSize] = useState(3);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1084,9 +977,7 @@ export const SessionScreen: React.FC = () => {
     ctx.stroke();
   };
 
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
+  const stopDrawing = () => setIsDrawing(false);
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
@@ -1109,8 +1000,8 @@ export const SessionScreen: React.FC = () => {
     showToast('Whiteboard snapshot downloaded!', 'success');
   };
 
-  // ── CODE PLAYGROUND ───────────────────────────────────────────
-  const [selectedPreset, setSelectedPreset] = useState<CodePreset>(CODE_PRESETS[0]);
+  // Code Sandbox
+  const [selectedPreset] = useState<CodePreset>(CODE_PRESETS[0]);
   const [codeContent, setCodeContent] = useState<string>(CODE_PRESETS[0].code);
   const [consoleOutput, setConsoleOutput] = useState<string>(CODE_PRESETS[0].output);
   const [isRunningCode, setIsRunningCode] = useState<boolean>(false);
@@ -1124,7 +1015,7 @@ export const SessionScreen: React.FC = () => {
     }, 500);
   };
 
-  // ── AI TRANSCRIPT COPILOT & MICRO-QUIZ ─────────────────────────
+  // AI Copilot
   const [aiChatMessages, setAiChatMessages] = useState<{ sender: 'ai' | 'user'; text: string; time: string }[]>([
     {
       sender: 'ai',
@@ -1162,7 +1053,7 @@ export const SessionScreen: React.FC = () => {
     }, 600);
   };
 
-  // Micro-Quiz State
+  // Micro-Quiz
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [quizAnswers, setQuizAnswers] = useState<{ [qIdx: number]: number }>({ 0: 1, 1: 0, 2: 2 });
   const [quizSubmitted, setQuizSubmitted] = useState(false);
@@ -1216,7 +1107,7 @@ export const SessionScreen: React.FC = () => {
     setMintedHash(newHash);
 
     if (generateNewCredentialBlock) {
-      generateNewCredentialBlock(currentUser.name, currentUser.id, activeMeeting.skill, scorePct);
+      generateNewCredentialBlock(currentUser?.name || 'User', currentUser?.id || '0', activeMeeting.skill, scorePct);
     }
 
     try {
@@ -1230,16 +1121,12 @@ export const SessionScreen: React.FC = () => {
     showToast(`Micro-Quiz submitted with ${scorePct}%! Minted to Credential Ledger.`, 'success');
   };
 
-  // End Meeting / Leave
   const handleLeaveMeeting = () => {
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
     }
-    // Reset ALL call state so re-joining a room later starts completely fresh:
-    // otherwise mediaStream stays non-null (with dead/stopped tracks), the
-    // camera auto-start effect's `!mediaStream` check skips re-requesting the
-    // camera, and the next call silently has no local video at all.
     setMediaStream(null);
+    mediaStreamRef.current = null;
     setIsCameraActive(false);
     setRemoteStream(null);
     setRemoteFrameUrl(null);
@@ -1249,19 +1136,15 @@ export const SessionScreen: React.FC = () => {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     if (hostVideoRef.current) hostVideoRef.current.srcObject = null;
     peerConnectionsRef.current.forEach(pc => {
-      try {
-        pc.close();
-      } catch {}
+      try { pc.close(); } catch {}
     });
     peerConnectionsRef.current.clear();
+    iceCandidatesQueue.current.clear();
     setSessionView('lobby');
     endLiveSession();
     showToast(`Left meeting room [${activeMeeting.roomCode}].`, 'info');
   };
 
-  // ═════════════════════════════════════════════════════════════════
-  // RENDER: LOBBY VIEW (Create or Attend Live Class)
-  // ═════════════════════════════════════════════════════════════════
   if (sessionView === 'lobby') {
     const filteredClasses = availableClasses.filter(c => {
       if (!searchQuery.trim()) return true;
@@ -1276,8 +1159,6 @@ export const SessionScreen: React.FC = () => {
 
     return (
       <div className="py-4 sm:py-8 max-w-[1180px] mx-auto px-3 sm:px-4 space-y-8">
-        
-        {/* Header Title & Switcher */}
         <div className="text-center space-y-4 max-w-2xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono-ledger font-bold shadow-2xs">
             <Radio className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
@@ -1292,7 +1173,6 @@ export const SessionScreen: React.FC = () => {
             Attend live classes from peers you are learning from, or create your own Google Meet-style online video study room to teach and earn barter credits.
           </p>
 
-          {/* Lobby Mode Pill Switcher */}
           <div className="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300 shadow-inner">
             <button
               onClick={() => setLobbyTab('attend')}
@@ -1323,11 +1203,8 @@ export const SessionScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* ── TAB 1: ATTEND A LIVE CLASS ───────────────────────────── */}
         {lobbyTab === 'attend' && (
           <div className="space-y-6">
-            
-            {/* Quick Join By Room Code Bar */}
             <div className="paper-card p-5 sm:p-6 bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="space-y-1 text-center md:text-left">
                 <h3 className="font-display font-bold text-base text-slate-900 flex items-center justify-center md:justify-start gap-2">
@@ -1357,7 +1234,6 @@ export const SessionScreen: React.FC = () => {
               </form>
             </div>
 
-            {/* Live Classes Grid */}
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -1365,11 +1241,10 @@ export const SessionScreen: React.FC = () => {
                     Live Classes from Instructors in Your Network
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Click "Join Live Class" to enter the Google Meet-style streaming studio with live whiteboard & code runner.
+                    Click &quot;Join Live Class&quot; to enter the Google Meet-style streaming studio.
                   </p>
                 </div>
 
-                {/* Filter / Search Input */}
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
                   <input
@@ -1389,7 +1264,6 @@ export const SessionScreen: React.FC = () => {
                     className="paper-card p-6 bg-white border border-slate-200 rounded-3xl shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between space-y-4 group"
                   >
                     <div className="space-y-3">
-                      {/* Top Badges */}
                       <div className="flex items-center justify-between gap-2">
                         <span className="inline-flex items-center gap-1.5 text-[11px] font-mono-ledger font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
@@ -1400,7 +1274,6 @@ export const SessionScreen: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Title & Topic */}
                       <div>
                         <h4 className="font-display font-bold text-base text-slate-900 group-hover:text-amber-600 transition-colors">
                           {cls.topic}
@@ -1410,7 +1283,6 @@ export const SessionScreen: React.FC = () => {
                         </p>
                       </div>
 
-                      {/* Instructor Info */}
                       <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
                         <img
                           src={cls.instructorAvatar}
@@ -1433,7 +1305,6 @@ export const SessionScreen: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Join Button */}
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono-ledger">
                         <Users className="w-3.5 h-3.5 text-slate-400" />
@@ -1452,11 +1323,9 @@ export const SessionScreen: React.FC = () => {
                 ))}
               </div>
             </div>
-
           </div>
         )}
 
-        {/* ── TAB 2: CREATE / HOST A LIVE ROOM ────────────────────── */}
         {lobbyTab === 'create' && (
           <div className="max-w-2xl mx-auto paper-card p-6 sm:p-8 bg-white border border-slate-200 rounded-3xl shadow-sm space-y-6">
             <div className="border-b border-slate-100 pb-4">
@@ -1465,12 +1334,11 @@ export const SessionScreen: React.FC = () => {
                 <span>Host an Instant Live Study Room</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Configure your meeting room. Share the generated link with any peer to teach live with WebRTC video and collaborative tools.
+                Configure your meeting room. Share the generated link with any peer to stream live.
               </p>
             </div>
 
             <form onSubmit={handleCreateAndStartRoom} className="space-y-4">
-              {/* Room Topic */}
               <div>
                 <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1">
                   Session Topic / Title *
@@ -1485,7 +1353,6 @@ export const SessionScreen: React.FC = () => {
                 />
               </div>
 
-              {/* Skill Selection */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1">
@@ -1496,7 +1363,7 @@ export const SessionScreen: React.FC = () => {
                     onChange={e => setNewRoomSkill(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
                   >
-                    {skills.map(s => (
+                    {(skills || []).map(s => (
                       <option key={s.id} value={s.name}>{s.name}</option>
                     ))}
                   </select>
@@ -1517,7 +1384,6 @@ export const SessionScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Generated Room Link Box */}
               <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2">
                 <div className="flex items-center justify-between text-xs font-mono-ledger font-bold text-amber-900">
                   <span>Generated Meeting Invite Link</span>
@@ -1544,7 +1410,6 @@ export const SessionScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Submit / Launch Button */}
               <button
                 type="submit"
                 className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-emerald-600 text-white font-bold text-xs transition-all shadow-md active:scale-98 cursor-pointer flex items-center justify-center gap-2"
@@ -1555,18 +1420,12 @@ export const SessionScreen: React.FC = () => {
             </form>
           </div>
         )}
-
       </div>
     );
   }
 
-  // ═════════════════════════════════════════════════════════════════
-  // RENDER: GOOGLE MEET-STYLE LIVE STREAMING STUDIO
-  // ═════════════════════════════════════════════════════════════════
   return (
     <div className="py-2 sm:py-4 max-w-[1360px] mx-auto px-2 sm:px-4 space-y-4">
-      
-      {/* ── TOP GOOGLE MEET STATUS BAR ───────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-3xl bg-slate-900 text-white shadow-xl border border-slate-800">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
@@ -1588,7 +1447,6 @@ export const SessionScreen: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Copy Meeting Link Button */}
           <button
             onClick={copyMeetLink}
             className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono-ledger font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
@@ -1598,7 +1456,6 @@ export const SessionScreen: React.FC = () => {
             <span>Copy Link</span>
           </button>
 
-          {/* Micro-Quiz Trigger */}
           <button
             onClick={() => setShowQuizModal(true)}
             className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
@@ -1609,19 +1466,14 @@ export const SessionScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* ── VIDEO STAGE & SIDE PANEL ──────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        
-        {/* VIDEO CONTAINER (Main Grid) */}
         <div className={`${activeSidePanel ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-3 transition-all duration-200`}>
-          
           <div
             ref={videoStageContainerRef}
             className={`relative rounded-3xl bg-slate-950 border border-slate-800 overflow-hidden shadow-2xl flex items-center justify-center group ${
               isFullscreen ? 'fixed inset-0 z-[100] rounded-none border-none aspect-auto w-screen h-screen' : 'aspect-video'
             }`}
           >
-            {/* ── MODE 1: SPEAKER VIEW (Main Stream + PiP Tile) ── */}
             {viewMode === 'speaker' && (
               <div className="relative w-full h-full flex items-center justify-center">
                 {isScreenSharing ? (
@@ -1641,7 +1493,7 @@ export const SessionScreen: React.FC = () => {
                     />
                     <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Live 1080p WebRTC Stream)</span>
+                      <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Live 1080p Stream)</span>
                     </div>
                   </div>
                 ) : remoteFrameUrl ? (
@@ -1653,7 +1505,7 @@ export const SessionScreen: React.FC = () => {
                     />
                     <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <span>{remotePeerInfo?.name || 'Peer on 2nd Device'} (Live Camera Broadcast)</span>
+                      <span>{remotePeerInfo?.name || 'Peer on 2nd Device'} (Live Broadcast)</span>
                     </div>
                   </div>
                 ) : isSimulatedPeerActive ? (
@@ -1681,7 +1533,7 @@ export const SessionScreen: React.FC = () => {
                         <span>Waiting for peer on 2nd device to open [{activeMeeting.roomCode}]...</span>
                       </div>
                       <p className="text-[11px] text-slate-400 max-w-sm mx-auto font-mono-ledger">
-                        Open this room link on your mobile or another tab to establish instant video stream.
+                        Open this room link on another tab/device to establish an instant WebRTC connection.
                       </p>
                     </div>
 
@@ -1704,7 +1556,7 @@ export const SessionScreen: React.FC = () => {
                   </div>
                 )}
 
-                {/* Picture-in-Picture / Learner Self View */}
+                {/* Local Camera Self View */}
                 <div className="absolute top-4 right-4 w-32 sm:w-48 aspect-video rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl overflow-hidden backdrop-blur-md z-20 group/pip">
                   {isCameraActive ? (
                     <video
@@ -1717,9 +1569,9 @@ export const SessionScreen: React.FC = () => {
                   ) : (
                     <div className="w-full h-full flex items-center justify-center flex-col text-center p-2">
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center mb-1">
-                        {currentUser.name[0]}
+                        {currentUser?.name?.[0] || 'U'}
                       </div>
-                      <span className="text-[10px] text-slate-300 font-mono-ledger truncate w-full">You ({currentUser.name.split(' ')[0]})</span>
+                      <span className="text-[10px] text-slate-300 font-mono-ledger truncate w-full">You</span>
                     </div>
                   )}
                   <div className="absolute bottom-1 left-2 text-[9px] font-mono-ledger text-white/90 flex items-center gap-1">
@@ -1730,11 +1582,8 @@ export const SessionScreen: React.FC = () => {
               </div>
             )}
 
-            {/* ── MODE 2: GRID VIEW (Side-by-Side Dual Equal 50/50 Tiles) ── */}
             {viewMode === 'grid' && (
               <div className="w-full h-full grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-4">
-                
-                {/* Tile 1: Remote Peer / Other Device */}
                 <div className="relative w-full h-full rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
                   {isScreenSharing ? (
                     <video ref={hostVideoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />
@@ -1748,44 +1597,39 @@ export const SessionScreen: React.FC = () => {
                     <div className="text-center space-y-2 p-2">
                       <img src={activeMeeting.instructorAvatar} alt={activeMeeting.instructorName} className="w-16 h-16 rounded-full object-cover border-2 border-amber-400 mx-auto" />
                       <p className="text-xs font-bold text-white">{activeMeeting.instructorName}</p>
-                      <p className="text-[10px] text-amber-400 font-mono-ledger">Waiting for 2nd device or click Simulate below</p>
                       <button
                         onClick={() => setIsSimulatedPeerActive(!isSimulatedPeerActive)}
                         className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold cursor-pointer hover:bg-emerald-700"
                       >
-                        Simulate 2nd Device Video
+                        Simulate Peer Video
                       </button>
                     </div>
                   )}
                   <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-950/80 text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-full ${remoteStream || remoteFrameUrl || isSimulatedPeerActive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
-                    <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Peer)</span>
+                    <span>{remotePeerInfo?.name || activeMeeting.instructorName}</span>
                   </div>
                 </div>
 
-                {/* Tile 2: Learner (You) */}
                 <div className="relative w-full h-full rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
                   {isCameraActive ? (
                     <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                   ) : (
                     <div className="text-center space-y-2">
-                      <img src={currentUser.avatar} alt={currentUser.name} className="w-20 h-20 rounded-full object-cover border-2 border-emerald-400 mx-auto" />
-                      <p className="text-xs font-bold text-white">{currentUser.name} (You)</p>
+                      <img src={currentUser?.avatar} alt={currentUser?.name} className="w-20 h-20 rounded-full object-cover border-2 border-emerald-400 mx-auto" />
+                      <p className="text-xs font-bold text-white">{currentUser?.name} (You)</p>
                     </div>
                   )}
                   <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-950/80 text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-full ${isMuted ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`}></span>
-                    <span>Learner · {currentUser.name.split(' ')[0]}</span>
+                    <span>Learner · {currentUser?.name?.split(' ')[0]}</span>
                   </div>
                 </div>
-
               </div>
             )}
 
-            {/* Hidden Canvas for Frame Capture */}
             <canvas ref={captureCanvasRef} className="hidden" />
 
-            {/* Floating Reaction Emojis */}
             {floatingReactions.map(r => (
               <div
                 key={r.id}
@@ -1796,17 +1640,14 @@ export const SessionScreen: React.FC = () => {
               </div>
             ))}
 
-            {/* Hand Raised Banner */}
             {handRaised && (
               <div className="absolute top-4 left-4 px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-900 font-bold text-xs flex items-center gap-1.5 shadow-lg animate-bounce z-30">
                 <Hand className="w-4 h-4" />
-                <span>Hand Raised by {currentUser.name.split(' ')[0]}</span>
+                <span>Hand Raised by {currentUser?.name?.split(' ')[0]}</span>
               </div>
             )}
 
-            {/* Top Right Fullscreen & View Mode Controls Bar */}
             <div className="absolute top-4 left-4 flex items-center gap-2 z-30">
-              {/* View Switcher Pill */}
               <div className="flex bg-slate-900/80 backdrop-blur-md p-1 rounded-xl border border-slate-700">
                 <button
                   onClick={() => setViewMode('speaker')}
@@ -1826,7 +1667,6 @@ export const SessionScreen: React.FC = () => {
                 </button>
               </div>
 
-              {/* Fullscreen Toggle Button */}
               <button
                 onClick={toggleFullscreen}
                 className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 transition-transform active:scale-95 cursor-pointer"
@@ -1836,7 +1676,6 @@ export const SessionScreen: React.FC = () => {
               </button>
             </div>
 
-            {/* Quick Floating Emoji Reaction Bar */}
             <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-slate-900/80 backdrop-blur-md p-1.5 rounded-2xl border border-slate-700/80 z-30">
               {['🔥', '💡', '👏', '🚀', '❓'].map(emoji => (
                 <button
@@ -1850,22 +1689,16 @@ export const SessionScreen: React.FC = () => {
                 </button>
               ))}
             </div>
-
           </div>
 
-          {/* ── GOOGLE MEET BOTTOM CONTROL DOCK ──────────────────────── */}
           <div className="p-2.5 sm:p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shadow-xl">
-            
-            {/* Left: Time & Meeting Code */}
             <div className="hidden sm:flex items-center gap-2 text-slate-300 font-mono-ledger text-xs">
               <span className="font-bold text-amber-400">{formatTimer(seconds)}</span>
               <span>|</span>
               <span className="text-slate-400">{activeMeeting.roomCode}</span>
             </div>
 
-            {/* Center: Main Stream Action Buttons */}
             <div className="flex items-center gap-1.5 sm:gap-3 mx-auto sm:mx-0 flex-wrap justify-center">
-              {/* Mic Toggle */}
               <button
                 onClick={() => setIsMuted(!isMuted)}
                 className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
@@ -1876,7 +1709,6 @@ export const SessionScreen: React.FC = () => {
                 {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
 
-              {/* Camera Toggle */}
               <button
                 onClick={toggleCamera}
                 className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
@@ -1887,7 +1719,6 @@ export const SessionScreen: React.FC = () => {
                 {isCameraActive ? <VideoIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
 
-              {/* Screen Share Toggle */}
               <button
                 onClick={toggleScreenShare}
                 className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
@@ -1898,7 +1729,6 @@ export const SessionScreen: React.FC = () => {
                 <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
-              {/* Raise Hand Toggle */}
               <button
                 onClick={() => setHandRaised(!handRaised)}
                 className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
@@ -1909,7 +1739,6 @@ export const SessionScreen: React.FC = () => {
                 <Hand className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
-              {/* Fullscreen in Dock */}
               <button
                 onClick={toggleFullscreen}
                 className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
@@ -1920,7 +1749,6 @@ export const SessionScreen: React.FC = () => {
                 <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
-              {/* Red End Call Button */}
               <button
                 onClick={handleLeaveMeeting}
                 className="px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
@@ -1931,7 +1759,6 @@ export const SessionScreen: React.FC = () => {
               </button>
             </div>
 
-            {/* Right: Side Panel Toggles */}
             <div className="flex items-center gap-1 sm:gap-1.5 mx-auto sm:mx-0">
               <button
                 onClick={() => setActiveSidePanel(activeSidePanel === 'chat' ? null : 'chat')}
@@ -1973,16 +1800,11 @@ export const SessionScreen: React.FC = () => {
                 <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
-
           </div>
-
         </div>
 
-        {/* ── RIGHT COLLAPSIBLE SIDE PANEL (Chat / Whiteboard / Code / Copilot) ── */}
         {activeSidePanel && (
           <div className="lg:col-span-4 paper-card p-5 bg-white border border-slate-200 rounded-3xl shadow-lg space-y-4 max-h-[82vh] overflow-y-auto">
-            
-            {/* Header with Title & Close */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-display font-bold text-sm text-slate-900 uppercase tracking-wide flex items-center gap-2">
                 {activeSidePanel === 'chat' && <MessageSquare className="w-4 h-4 text-amber-600" />}
@@ -1998,13 +1820,12 @@ export const SessionScreen: React.FC = () => {
               </h3>
               <button
                 onClick={() => setActiveSidePanel(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* SIDE PANEL 1: IN-CALL CHAT */}
             {activeSidePanel === 'chat' && (
               <div className="space-y-3">
                 <div className="h-80 overflow-y-auto space-y-3 pr-1 text-xs">
@@ -2040,7 +1861,6 @@ export const SessionScreen: React.FC = () => {
               </div>
             )}
 
-            {/* SIDE PANEL 2: WHITEBOARD */}
             {activeSidePanel === 'whiteboard' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-1 flex-wrap">
@@ -2059,10 +1879,10 @@ export const SessionScreen: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <button onClick={downloadCanvasImage} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700">
+                    <button onClick={downloadCanvasImage} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
                       <Download className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={clearCanvas} className="px-2 py-1 text-[11px] rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700">
+                    <button onClick={clearCanvas} className="px-2 py-1 text-[11px] rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
                       Clear
                     </button>
                   </div>
@@ -2084,7 +1904,6 @@ export const SessionScreen: React.FC = () => {
               </div>
             )}
 
-            {/* SIDE PANEL 3: CODE SANDBOX */}
             {activeSidePanel === 'code' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -2113,7 +1932,6 @@ export const SessionScreen: React.FC = () => {
               </div>
             )}
 
-            {/* SIDE PANEL 4: AI COPILOT */}
             {activeSidePanel === 'copilot' && (
               <div className="space-y-3">
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] font-mono-ledger">
@@ -2178,15 +1996,10 @@ export const SessionScreen: React.FC = () => {
                 </form>
               </div>
             )}
-
           </div>
         )}
-
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* MODAL: MICRO-QUIZ & SHA-256 LEDGER MINTING                   */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
       {showQuizModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
@@ -2207,7 +2020,7 @@ export const SessionScreen: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowQuizModal(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
                 ✕
               </button>
@@ -2275,7 +2088,7 @@ export const SessionScreen: React.FC = () => {
                   </div>
                   <p className="text-[11px] break-all">{mintedHash || '0000a7b4e89fc192d4f8e6b12a39c4d5e8912'}</p>
                   <p className="text-[10px] text-slate-400">
-                    Learner: {currentUser.name} • Skill: {activeMeeting.skill} • Verified by Peer AI
+                    Learner: {currentUser?.name} • Skill: {activeMeeting.skill} • Verified by Peer AI
                   </p>
                 </div>
 
@@ -2290,7 +2103,6 @@ export const SessionScreen: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };
