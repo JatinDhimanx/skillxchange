@@ -19,6 +19,7 @@ import {
   FileText,
   Clock,
   History,
+  Radio,
 } from 'lucide-react';
 
 interface VoiceAnalysisResult {
@@ -43,7 +44,7 @@ const SCENARIOS = [
     title: 'Startup Investor Pitch (3-Min Pitch)',
     audience: 'Venture Capitalists & Angel Investors',
     sample:
-      'We are building SkillXchange, a decentralized peer knowledge network that eliminates high learning costs through tokenized barter credits and verifiable skill certificates.',
+      'We are building SkillXchange, a decentralized peer knowledge network that eliminates high tuition costs through tokenized skill bartering and verifiable on-chain certificates.',
   },
   {
     id: 'tech',
@@ -59,7 +60,7 @@ const SCENARIOS = [
     title: 'Executive Compensation Negotiation',
     audience: 'Hiring Committee & HR Director',
     sample:
-      'Based on the industry compensation benchmarks for this principal role and my verified track record of scaling high-throughput engineering teams, I am targeting an annual package of 45 Lakhs with performance equity.',
+      'Based on the industry compensation benchmarks for this role and my verified track record of scaling high-throughput engineering teams, I am targeting an annual package of 45 Lakhs with performance equity.',
   },
   {
     id: 'fluency',
@@ -78,6 +79,7 @@ export const SoftSkillsLab: React.FC = () => {
   const [transcript, setTranscript] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<VoiceAnalysisResult | null>(null);
   const [isSpeakingTTS, setIsSpeakingTTS] = useState(false);
@@ -85,9 +87,24 @@ export const SoftSkillsLab: React.FC = () => {
   const [history, setHistory] = useState<VoiceAnalysisResult[]>([]);
 
   const recognitionRef = useRef<any>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
-  // Setup Web Speech Recognition
+  // 1. DEDICATED TIMER EFFECT (Guaranteed reliable timer)
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingSeconds(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
+  // 2. SPEECH RECOGNITION SETUP
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognition =
@@ -108,17 +125,7 @@ export const SoftSkillsLab: React.FC = () => {
         };
 
         recognition.onerror = (err: any) => {
-          console.warn('Speech recognition notice:', err);
-        };
-
-        recognition.onend = () => {
-          if (isRecording) {
-            try {
-              recognition.start();
-            } catch {
-              // Ignore
-            }
-          }
+          console.warn('Speech recognition notice:', err.error);
         };
 
         recognitionRef.current = recognition;
@@ -126,7 +133,6 @@ export const SoftSkillsLab: React.FC = () => {
     }
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -137,17 +143,59 @@ export const SoftSkillsLab: React.FC = () => {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(t => t.stop());
+      }
     };
-  }, [isRecording]);
+  }, []);
 
-  // Start / Stop Microphone Recording
-  const toggleRecording = () => {
+  // 3. START / STOP RECORDING WITH LIVE MICROPHONE AUDIO ANALYZER
+  const toggleRecording = async () => {
     if (!isRecording) {
-      setIsRecording(true);
+      // START RECORDING
       setRecordingSeconds(0);
       setTranscript('');
       setAnalysisResult(null);
+      setIsRecording(true);
 
+      // Request browser microphone hardware access
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioStreamRef.current = stream;
+
+          // Setup AudioContext for real live audio volume wave metering
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            const audioCtx = new AudioContextClass();
+            const source = audioCtx.createMediaStreamSource(stream);
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 64;
+            source.connect(analyser);
+            audioContextRef.current = audioCtx;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const checkAudioLevel = () => {
+              if (!analyser) return;
+              analyser.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < bufferLength; i++) {
+                sum += dataArray[i];
+              }
+              const avg = sum / bufferLength;
+              setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
+              animFrameRef.current = requestAnimationFrame(checkAudioLevel);
+            };
+            checkAudioLevel();
+          }
+        }
+      } catch (micErr) {
+        console.warn('Microphone permission exception:', micErr);
+      }
+
+      // Start Speech Recognition
       if (recognitionRef.current) {
         try {
           recognitionRef.current.start();
@@ -156,14 +204,30 @@ export const SoftSkillsLab: React.FC = () => {
         }
       }
 
-      timerRef.current = setInterval(() => {
-        setRecordingSeconds(prev => prev + 1);
-      }, 1000);
-
-      showToast('Microphone active. Start speaking your rehearsal...', 'info');
+      showToast('Microphone active! Speak clearly into your mic...', 'info');
     } else {
+      // STOP RECORDING
       setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
+      setAudioLevel(0);
+
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(t => t.stop());
+        audioStreamRef.current = null;
+      }
+
+      if (audioContextRef.current) {
+        try {
+          audioContextRef.current.close();
+        } catch {
+          // Ignore
+        }
+        audioContextRef.current = null;
+      }
+
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -171,11 +235,12 @@ export const SoftSkillsLab: React.FC = () => {
           console.warn('Recognition stop exception:', e);
         }
       }
-      showToast('Recording stopped. Click "Analyze Speech" for AI feedback.', 'success');
+
+      showToast('Recording stopped! Click "Analyze Speech" for AI feedback.', 'success');
     }
   };
 
-  // Analyze Speech with Gemini AI
+  // 4. RUN AI SPEECH ANALYSIS
   const handleAnalyze = async () => {
     const textToAnalyze = transcript.trim() || activeScenario.sample;
     if (!textToAnalyze) {
@@ -216,7 +281,7 @@ export const SoftSkillsLab: React.FC = () => {
     }
   };
 
-  // Text to Speech
+  // 5. TEXT TO SPEECH (TTS)
   const toggleTTS = (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
       showToast('Text-to-speech not supported on this device.', 'info');
@@ -334,9 +399,9 @@ export const SoftSkillsLab: React.FC = () => {
           </button>
         </div>
 
-        {/* Big Clean Mic Record Bar */}
+        {/* Big Clean Mic Record Bar with Live Audio Visualizer */}
         <div className="flex items-center justify-between flex-wrap gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             <button
               onClick={toggleRecording}
               className={`px-5 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
@@ -350,15 +415,31 @@ export const SoftSkillsLab: React.FC = () => {
             </button>
 
             {isRecording && (
-              <span className="text-xs font-mono-ledger font-bold text-rose-600 flex items-center gap-1.5">
-                <Clock className="w-4 h-4 animate-spin" />
-                {formatTimer(recordingSeconds)}
-              </span>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-mono-ledger font-bold">
+                <Radio className="w-3.5 h-3.5 animate-pulse text-rose-600" />
+                <span>{formatTimer(recordingSeconds)}</span>
+              </div>
             )}
           </div>
 
+          {/* Real Audio Level Waveform Bars */}
+          {isRecording && (
+            <div className="flex items-center gap-1 h-5">
+              {[20, 45, 80, 100, 60, 90, 40, 75, 50, 95].map((val, idx) => {
+                const heightPct = Math.max(15, (audioLevel * val) / 70);
+                return (
+                  <div
+                    key={idx}
+                    className="w-1 bg-emerald-500 rounded-full transition-all duration-100"
+                    style={{ height: `${Math.min(100, heightPct)}%` }}
+                  />
+                );
+              })}
+            </div>
+          )}
+
           <span className="text-xs font-mono-ledger text-slate-500">
-            {isRecording ? 'Listening in real time...' : 'Speak with mic or type below'}
+            {isRecording ? 'Capturing speech in real time...' : 'Speak with mic or type below'}
           </span>
         </div>
 
@@ -385,7 +466,7 @@ export const SoftSkillsLab: React.FC = () => {
               {isAnalyzing ? (
                 <>
                   <Sparkles className="w-4 h-4 animate-spin" />
-                  <span>Evaluating with Gemini AI...</span>
+                  <span>Evaluating with AI Coach...</span>
                 </>
               ) : (
                 <>
