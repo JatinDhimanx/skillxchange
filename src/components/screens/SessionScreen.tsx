@@ -277,8 +277,7 @@ export const SessionScreen: React.FC = () => {
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
   const [audioLevel, setAudioLevel] = useState<number>(35);
 
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const targetPeerIdRef = useRef<string | null>(null);
+  const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const realtimeChannelRef = useRef<any>(null);
   const localClientId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`);
@@ -451,25 +450,28 @@ export const SessionScreen: React.FC = () => {
     }
   }, [remoteStream, sessionView, viewMode, isScreenSharing]);
 
-  // Synchronize local media tracks to existing PeerConnection dynamically without closing connection
+  // Synchronize local media tracks to existing PeerConnections dynamically without closing connections
   useEffect(() => {
     mediaStreamRef.current = mediaStream;
-    const pc = peerConnectionRef.current;
-    if (pc && pc.signalingState !== 'closed' && mediaStream) {
-      const senders = pc.getSenders();
-      mediaStream.getTracks().forEach(track => {
-        const existingSender = senders.find(s => s.track && s.track.kind === track.kind);
-        if (existingSender) {
-          existingSender.replaceTrack(track).catch(err => console.error('Error replacing track:', err));
-        } else {
-          try {
-            pc.addTrack(track, mediaStream);
-          } catch (err) {
-            console.error('Error adding track:', err);
+    if (!mediaStream) return;
+
+    peerConnectionsRef.current.forEach((pc, peerId) => {
+      if (pc.signalingState !== 'closed') {
+        const senders = pc.getSenders();
+        mediaStream.getTracks().forEach(track => {
+          const existingSender = senders.find(s => s.track && s.track.kind === track.kind);
+          if (existingSender) {
+            existingSender.replaceTrack(track).catch(err => console.error('Error replacing track for peer:', peerId, err));
+          } else {
+            try {
+              pc.addTrack(track, mediaStream);
+            } catch (err) {
+              console.error('Error adding track for peer:', peerId, err);
+            }
           }
-        }
-      });
-    }
+        });
+      }
+    });
   }, [mediaStream]);
 
   // ── WEBRTC P2P MULTI-DEVICE SIGNALING VIA SUPABASE REALTIME ──
@@ -483,31 +485,33 @@ export const SessionScreen: React.FC = () => {
     realtimeChannelRef.current = channel;
 
     const initPeerConnection = (targetClientId: string) => {
+      const existingPc = peerConnectionsRef.current.get(targetClientId);
       if (
-        peerConnectionRef.current &&
-        peerConnectionRef.current.signalingState !== 'closed' &&
-        targetPeerIdRef.current === targetClientId
+        existingPc &&
+        !['failed', 'closed', 'disconnected'].includes(existingPc.connectionState) &&
+        existingPc.signalingState !== 'closed'
       ) {
-        return peerConnectionRef.current;
+        return existingPc;
       }
 
-      if (peerConnectionRef.current) {
+      if (existingPc) {
         try {
-          peerConnectionRef.current.close();
+          existingPc.close();
         } catch {}
-        peerConnectionRef.current = null;
+        peerConnectionsRef.current.delete(targetClientId);
       }
 
-      targetPeerIdRef.current = targetClientId;
       const pc = new RTCPeerConnection(ICE_SERVERS);
-      peerConnectionRef.current = pc;
+      peerConnectionsRef.current.set(targetClientId, pc);
 
       // Add local media tracks if active
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach(track => {
           try {
             pc.addTrack(track, mediaStreamRef.current!);
-          } catch {}
+          } catch (err) {
+            console.error('Error adding track to new connection:', err);
+          }
         });
       }
 
@@ -527,7 +531,7 @@ export const SessionScreen: React.FC = () => {
       };
 
       pc.ontrack = event => {
-        console.log('Incoming remote WebRTC track from second device:', event.streams[0]);
+        console.log('Incoming remote WebRTC track from peer:', targetClientId, event.streams[0]);
         if (event.streams && event.streams[0]) {
           const stream = event.streams[0];
           setRemoteStream(stream);
@@ -560,8 +564,14 @@ export const SessionScreen: React.FC = () => {
               },
             });
           } catch (err) {
-            console.error('Renegotiation error:', err);
+            console.error('Renegotiation offer error for peer:', targetClientId, err);
           }
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          peerConnectionsRef.current.delete(targetClientId);
         }
       };
 
@@ -576,12 +586,13 @@ export const SessionScreen: React.FC = () => {
         avatar: peerPayload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
       });
 
-      // If an active RTCPeerConnection already exists for this peer, do NOT tear down or restart
+      const existingPc = peerConnectionsRef.current.get(peerPayload.from);
       if (
-        peerConnectionRef.current &&
-        peerConnectionRef.current.signalingState !== 'closed' &&
-        targetPeerIdRef.current === peerPayload.from
+        existingPc &&
+        !['failed', 'closed', 'disconnected'].includes(existingPc.connectionState) &&
+        existingPc.signalingState !== 'closed'
       ) {
+        // Active connection already established with this peer, do not recreate
         return;
       }
 
@@ -608,7 +619,7 @@ export const SessionScreen: React.FC = () => {
             },
           });
         } catch (err) {
-          console.error('Failed to create offer:', err);
+          console.error('Failed to create offer for peer:', peerPayload.from, err);
         }
       }
     };
@@ -619,6 +630,27 @@ export const SessionScreen: React.FC = () => {
       })
       .on('broadcast', { event: 'peer_ping' }, async ({ payload }) => {
         handlePeerArrived(payload);
+      })
+      .on('broadcast', { event: 'peer_leave' }, ({ payload }) => {
+        if (!payload || payload.from === localClientId.current) return;
+        const leavingPeerId = payload.from;
+        const pc = peerConnectionsRef.current.get(leavingPeerId);
+        if (pc) {
+          try {
+            pc.close();
+          } catch {}
+          peerConnectionsRef.current.delete(leavingPeerId);
+        }
+        setRemotePeerInfo(prev => {
+          if (prev?.id === leavingPeerId) {
+            setRemoteStream(null);
+            setRemoteFrameUrl(null);
+            if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+            if (hostVideoRef.current && !isScreenSharing) hostVideoRef.current.srcObject = null;
+            return null;
+          }
+          return prev;
+        });
       })
       .on('broadcast', { event: 'webrtc_signal' }, async ({ payload }) => {
         if (!payload || payload.from === localClientId.current) return;
@@ -646,24 +678,24 @@ export const SessionScreen: React.FC = () => {
               },
             });
           } catch (err) {
-            console.error('Error handling SDP offer:', err);
+            console.error('Error handling SDP offer from peer:', payload.from, err);
           }
         } else if (payload.type === 'sdp_answer') {
-          const pc = peerConnectionRef.current;
+          const pc = peerConnectionsRef.current.get(payload.from);
           if (pc && (pc.signalingState === 'have-local-offer' || pc.signalingState === 'have-remote-offer')) {
             try {
               await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
             } catch (err) {
-              console.error('Error handling SDP answer:', err);
+              console.error('Error handling SDP answer from peer:', payload.from, err);
             }
           }
         } else if (payload.type === 'ice_candidate') {
-          const pc = peerConnectionRef.current;
+          const pc = peerConnectionsRef.current.get(payload.from);
           if (pc && payload.candidate) {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
             } catch (err) {
-              console.error('Error adding ICE candidate:', err);
+              console.error('Error adding ICE candidate from peer:', payload.from, err);
             }
           }
         }
@@ -729,12 +761,12 @@ export const SessionScreen: React.FC = () => {
     return () => {
       clearInterval(pingInterval);
       channel.unsubscribe();
-      if (peerConnectionRef.current) {
+      peerConnectionsRef.current.forEach(pc => {
         try {
-          peerConnectionRef.current.close();
+          pc.close();
         } catch {}
-        peerConnectionRef.current = null;
-      }
+      });
+      peerConnectionsRef.current.clear();
     };
   }, [sessionView, activeMeeting.roomCode]);
 
@@ -792,13 +824,24 @@ export const SessionScreen: React.FC = () => {
 
   // Toggle Camera
   const toggleCamera = async () => {
-    if (isCameraActive && mediaStream) {
-      mediaStream.getVideoTracks().forEach(t => {
-        t.enabled = !t.enabled;
-      });
-      const newState = !isCameraActive;
-      setIsCameraActive(newState);
-      showToast(newState ? 'Camera resumed.' : 'Camera paused.', 'info');
+    if (mediaStream && mediaStream.getVideoTracks().length > 0) {
+      if (isCameraActive) {
+        mediaStream.getVideoTracks().forEach(t => {
+          t.enabled = false;
+        });
+        setIsCameraActive(false);
+        showToast('Camera paused.', 'info');
+      } else {
+        mediaStream.getVideoTracks().forEach(t => {
+          t.enabled = true;
+        });
+        setIsCameraActive(true);
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = mediaStream;
+          localVideoRef.current.play().catch(() => {});
+        }
+        showToast('Camera resumed.', 'info');
+      }
     } else {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -1152,6 +1195,16 @@ export const SessionScreen: React.FC = () => {
 
   // End Meeting / Leave
   const handleLeaveMeeting = () => {
+    if (realtimeChannelRef.current) {
+      try {
+        realtimeChannelRef.current.send({
+          type: 'broadcast',
+          event: 'peer_leave',
+          payload: { from: localClientId.current },
+        });
+      } catch {}
+    }
+
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
     }
@@ -1159,13 +1212,20 @@ export const SessionScreen: React.FC = () => {
       mediaStreamRef.current.getTracks().forEach(t => t.stop());
       mediaStreamRef.current = null;
     }
-    if (peerConnectionRef.current) {
+
+    peerConnectionsRef.current.forEach(pc => {
       try {
-        peerConnectionRef.current.close();
+        pc.close();
       } catch {}
-      peerConnectionRef.current = null;
+    });
+    peerConnectionsRef.current.clear();
+
+    if (realtimeChannelRef.current) {
+      try {
+        realtimeChannelRef.current.unsubscribe();
+      } catch {}
+      realtimeChannelRef.current = null;
     }
-    targetPeerIdRef.current = null;
 
     setMediaStream(null);
     setIsCameraActive(false);
