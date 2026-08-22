@@ -247,8 +247,15 @@ export const MatchesScreen: React.FC = () => {
             </p>
           </div>
 
-          {/* Quick Primary Actions: List My Skill Button */}
+          {/* Quick Primary Actions: List My Skill Button & AI Discovery */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+            <button
+              onClick={() => setActiveTab('discovery')}
+              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-amber-100 animate-spin" style={{ animationDuration: '3s' }} />
+              <span>🚀 AI Skill Discovery</span>
+            </button>
             <button
               onClick={() => {
                 setAddSkillTab('teach');

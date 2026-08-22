@@ -156,8 +156,12 @@ const FEATURE_HIGHLIGHTS = [
 /* ──────────────────────────────────────────────────────────── */
 /* COMPONENT                                                   */
 /* ──────────────────────────────────────────────────────────── */
+import { AISkillDiscoveryModal } from '../innovations/AISkillDiscoveryModal';
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   const { allUsers, currentUser, openChatWithPeer, isAuthenticated, openAuthModal } = useApp();
+
+  const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
 
   // Animated counters
   const [stats, setStats] = useState({ exchanges: 0, credits: 0, chains: 0, escrowRate: 0 });
@@ -352,17 +356,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
         {/* CTA buttons */}
         <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+          {/* Primary AI Skill Discovery Button */}
+          <button
+            onClick={() => setIsDiscoveryModalOpen(true)}
+            className="px-7 py-3 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold text-sm shadow-lg shadow-amber-500/25 transition-all flex items-center gap-2.5 active:scale-95 whitespace-nowrap cursor-pointer hover:shadow-xl hover:shadow-amber-500/30"
+          >
+            <Sparkles className="w-4 h-4 text-amber-100 animate-spin" style={{ animationDuration: '3s' }} />
+            <span>🚀 Start Skill Discovery</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/20 text-white font-mono-ledger border border-white/30">
+              AI CHAT-13
+            </span>
+          </button>
+
           {isAuthenticated && currentUser.id !== 'guest' ? (
             <>
               <button
                 onClick={() => onNavigate('matches')}
-                className="px-7 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
+                className="px-6 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 Find My Matches <ArrowRight className="w-4 h-4" />
               </button>
               <button
                 onClick={() => onNavigate('session')}
-                className="px-7 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
+                className="px-6 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 Open Study Room <Video className="w-4 h-4" />
               </button>
@@ -371,13 +387,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
             <>
               <button
                 onClick={() => openAuthModal('signup')}
-                className="px-7 py-3 rounded-full bg-slate-900 hover:bg-emerald-600 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
+                className="px-6 py-3 rounded-full bg-slate-900 hover:bg-emerald-600 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 <span>Get Started Free</span> <ArrowRight className="w-4 h-4" />
               </button>
               <button
                 onClick={() => openAuthModal('signin')}
-                className="px-6 py-3 rounded-full bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-sm shadow-xs transition-all active:scale-95 whitespace-nowrap cursor-pointer"
+                className="px-5 py-3 rounded-full bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-sm shadow-xs transition-all active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 Sign In
               </button>
@@ -818,6 +834,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         </div>
       </section>
 
+      {/* AI Skill Discovery Modal (CHAT-13) */}
+      <AISkillDiscoveryModal
+        isOpen={isDiscoveryModalOpen}
+        onClose={() => setIsDiscoveryModalOpen(false)}
+        onNavigateToMatches={() => onNavigate('matches')}
+      />
     </div>
   );
 };

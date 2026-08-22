@@ -56,6 +56,9 @@ import {
 
 export type NavigationTab =
   | 'home'
+  | 'discovery'
+  | 'ai-discovery'
+  | 'skill-discovery'
   | 'matches'
   | 'matching'
   | 'matching_hub'

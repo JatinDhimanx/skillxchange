@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 export type ScreenTab =
-  | 'home' | 'matches' | 'chains' | 'graph' | 'session'
+  | 'home' | 'matches' | 'discovery' | 'chains' | 'graph' | 'session'
   | 'wallet' | 'bounties' | 'fusion' | 'second_brain'
   | 'credentials' | 'soft_skills' | 'college' | 'profile' | 'progress';
 
@@ -77,15 +77,17 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
     return () => { document.body.style.overflow = ''; };
   }, [mobileMenuOpen, showAddSkillModal]);
 
-  const mainNavItems: { id: ScreenTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'home',     label: 'Home',         icon: <Compass  className="w-4 h-4" /> },
-    { id: 'matches',  label: 'Find Matches',  icon: <Users    className="w-4 h-4" /> },
-    { id: 'session',  label: 'Study Room',    icon: <Video    className="w-4 h-4" /> },
-    { id: 'wallet',   label: 'My Credits',    icon: <Wallet   className="w-4 h-4" /> },
-    { id: 'progress', label: 'My Progress',   icon: <BarChart2 className="w-4 h-4" /> },
+  const mainNavItems: { id: ScreenTab; label: string; icon: React.ReactNode; badge?: string }[] = [
+    { id: 'home',      label: 'Home',         icon: <Compass   className="w-4 h-4" /> },
+    { id: 'discovery', label: 'AI Discovery', icon: <Sparkles  className="w-4 h-4 text-amber-500" />, badge: 'CHAT-13' },
+    { id: 'matches',   label: 'Find Matches', icon: <Users     className="w-4 h-4" /> },
+    { id: 'session',   label: 'Study Room',   icon: <Video     className="w-4 h-4" /> },
+    { id: 'wallet',    label: 'My Credits',   icon: <Wallet    className="w-4 h-4" /> },
+    { id: 'progress',  label: 'My Progress',  icon: <BarChart2 className="w-4 h-4" /> },
   ];
 
   const innovationItems: { id: ScreenTab; label: string; icon: React.ReactNode; desc: string }[] = [
+    { id: 'discovery',    label: 'SkillXchange AI',    icon: <Sparkles     className="w-4 h-4 text-amber-500"  />, desc: 'Interactive 3-choice skill discovery' },
     { id: 'soft_skills',  label: 'AI Voice Lab',       icon: <Mic          className="w-4 h-4 text-amber-600"  />, desc: 'Speech cadence & clarity analyzer'      },
     { id: 'second_brain', label: 'Second Brain',        icon: <BookOpen     className="w-4 h-4 text-emerald-600"/>, desc: 'Auto session wiki & flashcards'          },
     { id: 'credentials',  label: 'Credential Ledger',   icon: <Lock         className="w-4 h-4 text-blue-600"  />, desc: 'SHA-256 verifiable certificates'          },

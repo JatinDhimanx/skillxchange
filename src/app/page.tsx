@@ -19,6 +19,7 @@ import { FusionSessions } from '../components/innovations/FusionSessions';
 import { SecondBrainNotebook } from '../components/innovations/SecondBrainNotebook';
 import { CredentialLedger } from '../components/innovations/CredentialLedger';
 import { SoftSkillsLab } from '../components/innovations/SoftSkillsLab';
+import { AISkillDiscoveryView } from '../components/innovations/AISkillDiscoveryView';
 import { CollegeHub } from '../components/community/CollegeHub';
 import { PeerChatDrawer } from '../components/chat/PeerChatDrawer';
 import { AuthModal } from '../components/auth/AuthModal';
@@ -61,8 +62,8 @@ const MainAppContent: React.FC = () => {
   }, []);
 
   const handleSelectTab = (tab: ScreenTab) => {
-    // Allow guest to access session if joining via meet room, otherwise require auth
-    if (tab !== 'home' && tab !== 'session' && !isAuthenticated) {
+    // Allow guest to access home, session, and discovery
+    if (tab !== 'home' && tab !== 'session' && tab !== 'discovery' && !isAuthenticated) {
       openAuthModal('signup');
       return;
     }
@@ -71,13 +72,15 @@ const MainAppContent: React.FC = () => {
   };
 
   const renderScreen = () => {
-    if (currentTab !== 'home' && currentTab !== 'session' && !isAuthenticated) {
+    if (currentTab !== 'home' && currentTab !== 'session' && currentTab !== 'discovery' && !isAuthenticated) {
       return <HomeScreen onNavigate={handleSelectTab} />;
     }
 
     switch (currentTab) {
       case 'home':
         return <HomeScreen onNavigate={handleSelectTab} />;
+      case 'discovery':
+        return <AISkillDiscoveryView onNavigate={handleSelectTab} />;
       case 'matches':
         return <MatchesScreen />;
       case 'chains':
