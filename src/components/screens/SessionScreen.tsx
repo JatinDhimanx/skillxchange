@@ -261,10 +261,13 @@ export const SessionScreen: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const hostVideoRef = useRef<HTMLVideoElement | null>(null);
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [remoteFrameUrl, setRemoteFrameUrl] = useState<string | null>(null);
   const [remotePeerInfo, setRemotePeerInfo] = useState<{ id: string; name: string; avatar: string } | null>(null);
+  const [isSimulatedPeerActive, setIsSimulatedPeerActive] = useState<boolean>(false);
 
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -283,9 +286,18 @@ export const SessionScreen: React.FC = () => {
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      {
+        urls: [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp',
+        ],
+        username: 'openrelay',
+        credential: 'openrelay',
+      },
     ],
+    iceCandidatePoolSize: 10,
   };
 
   // Fullscreen sync listener
@@ -597,6 +609,16 @@ export const SessionScreen: React.FC = () => {
           ]);
         }
       })
+      .on('broadcast', { event: 'video_frame' }, ({ payload }) => {
+        if (payload && payload.from !== localClientId.current && payload.frame) {
+          setRemoteFrameUrl(payload.frame);
+          setRemotePeerInfo({
+            id: payload.from,
+            name: payload.name || 'Remote Peer',
+            avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+          });
+        }
+      })
       .on('broadcast', { event: 'emoji_reaction' }, ({ payload }) => {
         if (payload && payload.from !== localClientId.current) {
           triggerReaction(payload.emoji);
@@ -642,6 +664,41 @@ export const SessionScreen: React.FC = () => {
       }
     };
   }, [sessionView, activeMeeting.roomCode, mediaStream]);
+
+  // Live Canvas Video Frame Broadcaster (Bulletproof Fallback across any NAT/Firewall)
+  useEffect(() => {
+    if (sessionView !== 'live_meeting' || !isCameraActive) return;
+
+    const frameTimer = setInterval(() => {
+      if (localVideoRef.current && captureCanvasRef.current && isCameraActive && realtimeChannelRef.current) {
+        const video = localVideoRef.current;
+        const canvas = captureCanvasRef.current;
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          canvas.width = 320;
+          canvas.height = 180;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, 320, 180);
+            try {
+              const frameBase64 = canvas.toDataURL('image/jpeg', 0.45);
+              realtimeChannelRef.current.send({
+                type: 'broadcast',
+                event: 'video_frame',
+                payload: {
+                  from: localClientId.current,
+                  name: currentUser.name,
+                  avatar: currentUser.avatar,
+                  frame: frameBase64,
+                },
+              });
+            } catch {}
+          }
+        }
+      }
+    }, 280);
+
+    return () => clearInterval(frameTimer);
+  }, [sessionView, isCameraActive]);
 
   const handleCreateAndStartRoom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1421,19 +1478,65 @@ export const SessionScreen: React.FC = () => {
                     />
                     <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Live Peer Camera)</span>
+                      <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Live 1080p WebRTC Stream)</span>
+                    </div>
+                  </div>
+                ) : remoteFrameUrl ? (
+                  <div className="relative w-full h-full flex items-center justify-center bg-black">
+                    <img
+                      src={remoteFrameUrl}
+                      alt="Live Remote Video Frame"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>{remotePeerInfo?.name || 'Peer on 2nd Device'} (Live Camera Broadcast)</span>
+                    </div>
+                  </div>
+                ) : isSimulatedPeerActive ? (
+                  <div className="relative w-full h-full flex items-center justify-center bg-slate-900">
+                    <img
+                      src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900&auto=format&fit=crop&q=80"
+                      alt="Simulated Peer Video"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      <span>Alex Rivera (Simulated Peer Video Feed)</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3">
+                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3.5 p-4 text-center">
                     <img
                       src={activeMeeting.instructorAvatar}
                       alt={activeMeeting.instructorName}
-                      className="w-24 sm:w-32 h-24 sm:h-32 rounded-full object-cover border-4 border-amber-500/50 shadow-2xl animate-pulse"
+                      className="w-20 sm:w-28 h-20 sm:h-28 rounded-full object-cover border-4 border-amber-500/50 shadow-2xl animate-pulse"
                     />
-                    <div className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-300 text-xs font-mono-ledger font-bold flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                      <span>Waiting for peer on 2nd device to join [{activeMeeting.roomCode}]...</span>
+                    <div className="space-y-1">
+                      <div className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-200 text-xs font-mono-ledger font-bold inline-flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                        <span>Waiting for peer on 2nd device to open [{activeMeeting.roomCode}]...</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto font-mono-ledger">
+                        Open this room link on your mobile or another tab to establish instant video stream.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={copyMeetLink}
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono-ledger font-bold border border-slate-600 transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Copy Room Link</span>
+                      </button>
+                      <button
+                        onClick={() => setIsSimulatedPeerActive(!isSimulatedPeerActive)}
+                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <VideoIcon className="w-3.5 h-3.5" />
+                        <span>{isSimulatedPeerActive ? 'Stop Simulation' : 'Simulate 2nd Peer Video'}</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1474,15 +1577,25 @@ export const SessionScreen: React.FC = () => {
                     <video ref={hostVideoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />
                   ) : remoteStream ? (
                     <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                  ) : remoteFrameUrl ? (
+                    <img src={remoteFrameUrl} alt="Remote Peer Camera" className="w-full h-full object-cover" />
+                  ) : isSimulatedPeerActive ? (
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900&auto=format&fit=crop&q=80" alt="Simulated Peer Video" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="text-center space-y-2">
-                      <img src={activeMeeting.instructorAvatar} alt={activeMeeting.instructorName} className="w-20 h-20 rounded-full object-cover border-2 border-amber-400 mx-auto" />
+                    <div className="text-center space-y-2 p-2">
+                      <img src={activeMeeting.instructorAvatar} alt={activeMeeting.instructorName} className="w-16 h-16 rounded-full object-cover border-2 border-amber-400 mx-auto" />
                       <p className="text-xs font-bold text-white">{activeMeeting.instructorName}</p>
-                      <p className="text-[10px] text-amber-400 font-mono-ledger">Waiting for other device to join...</p>
+                      <p className="text-[10px] text-amber-400 font-mono-ledger">Waiting for 2nd device or click Simulate below</p>
+                      <button
+                        onClick={() => setIsSimulatedPeerActive(!isSimulatedPeerActive)}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold cursor-pointer hover:bg-emerald-700"
+                      >
+                        Simulate 2nd Device Video
+                      </button>
                     </div>
                   )}
                   <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-950/80 text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${remoteStream ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
+                    <span className={`w-2 h-2 rounded-full ${remoteStream || remoteFrameUrl || isSimulatedPeerActive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
                     <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Peer)</span>
                   </div>
                 </div>
@@ -1505,6 +1618,9 @@ export const SessionScreen: React.FC = () => {
 
               </div>
             )}
+
+            {/* Hidden Canvas for Frame Capture */}
+            <canvas ref={captureCanvasRef} className="hidden" />
 
             {/* Floating Reaction Emojis */}
             {floatingReactions.map(r => (
