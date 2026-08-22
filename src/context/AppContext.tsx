@@ -415,20 +415,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           hydrateAllData(profile);
         }
       } else {
-        const saved = localStorage.getItem('skillxchange_active_user');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (parsed && parsed.id && parsed.id !== 'guest') {
-              setCurrentUser(parsed);
-              setIsAuthenticated(true);
-              hydrateAllData(parsed);
-              setIsAuthLoading(false);
-              return;
-            }
-          } catch {}
-        }
+        // Supabase explicitly says there is no active session.
+        // Clear any stale localStorage data so a new user on the same
+        // device doesn't accidentally inherit the previous user's profile.
+        try {
+          localStorage.removeItem('skillxchange_active_user');
+        } catch {}
         setIsAuthenticated(false);
+        setCurrentUser(BLANK_GUEST_USER);
         setAuthModalOpen(false);
       }
       setIsAuthLoading(false);
