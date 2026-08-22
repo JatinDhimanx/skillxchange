@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase/client';
 import {
   Mic,
   MicOff,
@@ -255,11 +256,16 @@ export const SessionScreen: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ── MEDIA STREAMS & WEBRTC ─────────────────────────────────────
+  // ── MEDIA STREAMS & WEBRTC P2P ────────────────────────────────
   const videoStageContainerRef = useRef<HTMLDivElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const hostVideoRef = useRef<HTMLVideoElement | null>(null);
+
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [remotePeerInfo, setRemotePeerInfo] = useState<{ id: string; name: string; avatar: string } | null>(null);
+
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
@@ -267,6 +273,20 @@ export const SessionScreen: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
   const [audioLevel, setAudioLevel] = useState<number>(35);
+
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const realtimeChannelRef = useRef<any>(null);
+  const localClientId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`);
+
+  const ICE_SERVERS: RTCConfiguration = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+    ],
+  };
 
   // Fullscreen sync listener
   useEffect(() => {
@@ -394,6 +414,203 @@ export const SessionScreen: React.FC = () => {
     }
   }, [mediaStream, isCameraActive, sessionView, viewMode]);
 
+  // Keep remoteVideoRef and hostVideoRef attached to remoteStream
+  useEffect(() => {
+    if (remoteStream) {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStream;
+        remoteVideoRef.current.play().catch(() => {});
+      }
+      if (hostVideoRef.current && !isScreenSharing) {
+        hostVideoRef.current.srcObject = remoteStream;
+        hostVideoRef.current.play().catch(() => {});
+      }
+    }
+  }, [remoteStream, sessionView, viewMode, isScreenSharing]);
+
+  // ── WEBRTC P2P MULTI-DEVICE SIGNALING VIA SUPABASE REALTIME ──
+  useEffect(() => {
+    if (sessionView !== 'live_meeting' || !supabase) return;
+
+    const channelName = `study_room_${activeMeeting.roomCode.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    const channel = supabase.channel(channelName, {
+      config: { broadcast: { self: false } },
+    });
+    realtimeChannelRef.current = channel;
+
+    const initPeerConnection = (targetClientId: string) => {
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
+      }
+
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      peerConnectionRef.current = pc;
+
+      // Add local media tracks if active
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => {
+          pc.addTrack(track, mediaStream);
+        });
+      }
+
+      pc.onicecandidate = event => {
+        if (event.candidate) {
+          channel.send({
+            type: 'broadcast',
+            event: 'webrtc_signal',
+            payload: {
+              type: 'ice_candidate',
+              from: localClientId.current,
+              to: targetClientId,
+              candidate: event.candidate,
+            },
+          });
+        }
+      };
+
+      pc.ontrack = event => {
+        console.log('Incoming remote WebRTC track from second device:', event.streams[0]);
+        if (event.streams && event.streams[0]) {
+          const stream = event.streams[0];
+          setRemoteStream(stream);
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = stream;
+            remoteVideoRef.current.play().catch(() => {});
+          }
+          if (hostVideoRef.current && !isScreenSharing) {
+            hostVideoRef.current.srcObject = stream;
+            hostVideoRef.current.play().catch(() => {});
+          }
+        }
+      };
+
+      return pc;
+    };
+
+    channel
+      .on('broadcast', { event: 'peer_join' }, async ({ payload }) => {
+        if (!payload || payload.from === localClientId.current) return;
+        setRemotePeerInfo({
+          id: payload.from,
+          name: payload.name || 'Remote Peer',
+          avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+        });
+        showToast(`${payload.name || 'Second Device'} joined! Establishing live video link...`, 'info');
+
+        const pc = initPeerConnection(payload.from);
+        try {
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+          });
+          await pc.setLocalDescription(offer);
+          channel.send({
+            type: 'broadcast',
+            event: 'webrtc_signal',
+            payload: {
+              type: 'sdp_offer',
+              from: localClientId.current,
+              to: payload.from,
+              sdp: offer,
+              senderName: currentUser.name,
+              senderAvatar: currentUser.avatar,
+            },
+          });
+        } catch (err) {
+          console.error('Failed to create offer:', err);
+        }
+      })
+      .on('broadcast', { event: 'webrtc_signal' }, async ({ payload }) => {
+        if (!payload || payload.from === localClientId.current) return;
+        if (payload.to && payload.to !== localClientId.current) return;
+
+        if (payload.type === 'sdp_offer') {
+          setRemotePeerInfo({
+            id: payload.from,
+            name: payload.senderName || 'Instructor',
+            avatar: payload.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+          });
+          const pc = initPeerConnection(payload.from);
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            channel.send({
+              type: 'broadcast',
+              event: 'webrtc_signal',
+              payload: {
+                type: 'sdp_answer',
+                from: localClientId.current,
+                to: payload.from,
+                sdp: answer,
+              },
+            });
+          } catch (err) {
+            console.error('Error handling SDP offer:', err);
+          }
+        } else if (payload.type === 'sdp_answer') {
+          const pc = peerConnectionRef.current;
+          if (pc) {
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            } catch (err) {
+              console.error('Error handling SDP answer:', err);
+            }
+          }
+        } else if (payload.type === 'ice_candidate') {
+          const pc = peerConnectionRef.current;
+          if (pc && payload.candidate) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            } catch (err) {
+              console.error('Error adding ICE candidate:', err);
+            }
+          }
+        }
+      })
+      .on('broadcast', { event: 'chat_msg' }, ({ payload }) => {
+        if (payload && payload.from !== localClientId.current) {
+          setInCallMessages(prev => [
+            ...prev,
+            {
+              sender: payload.sender,
+              avatar: payload.avatar,
+              text: payload.text,
+              time: payload.time,
+              isMe: false,
+            },
+          ]);
+        }
+      })
+      .on('broadcast', { event: 'emoji_reaction' }, ({ payload }) => {
+        if (payload && payload.from !== localClientId.current) {
+          triggerReaction(payload.emoji);
+        }
+      })
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          channel.send({
+            type: 'broadcast',
+            event: 'peer_join',
+            payload: {
+              from: localClientId.current,
+              name: currentUser.name,
+              avatar: currentUser.avatar,
+            },
+          });
+        }
+      });
+
+    return () => {
+      channel.unsubscribe();
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
+      }
+    };
+  }, [sessionView, activeMeeting.roomCode, mediaStream]);
+
   const handleCreateAndStartRoom = (e: React.FormEvent) => {
     e.preventDefault();
     const topic = newRoomTopic.trim() || `${newRoomSkill} Live Interactive Masterclass`;
@@ -489,6 +706,18 @@ export const SessionScreen: React.FC = () => {
     setTimeout(() => {
       setFloatingReactions(prev => prev.filter(r => r.id !== newId));
     }, 2000);
+
+    // Broadcast emoji to other device
+    if (realtimeChannelRef.current) {
+      realtimeChannelRef.current.send({
+        type: 'broadcast',
+        event: 'emoji_reaction',
+        payload: {
+          from: localClientId.current,
+          emoji,
+        },
+      });
+    }
   };
 
   // ── IN-CALL CHAT ──────────────────────────────────────────────
@@ -512,29 +741,33 @@ export const SessionScreen: React.FC = () => {
     e.preventDefault();
     if (!inCallInput.trim()) return;
 
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const textStr = inCallInput.trim();
+
     const newMsg = {
       sender: currentUser.name,
       avatar: currentUser.avatar,
-      text: inCallInput.trim(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: textStr,
+      time: timeStr,
       isMe: true,
     };
     setInCallMessages(prev => [...prev, newMsg]);
     setInCallInput('');
 
-    // Teacher auto-reply simulation
-    setTimeout(() => {
-      setInCallMessages(prev => [
-        ...prev,
-        {
-          sender: activeMeeting.instructorName,
-          avatar: activeMeeting.instructorAvatar,
-          text: `Great point! Let's pull up that exact snippet on the collaborative whiteboard.`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMe: false,
+    // Broadcast chat message to other device
+    if (realtimeChannelRef.current) {
+      realtimeChannelRef.current.send({
+        type: 'broadcast',
+        event: 'chat_msg',
+        payload: {
+          from: localClientId.current,
+          sender: currentUser.name,
+          avatar: currentUser.avatar,
+          text: textStr,
+          time: timeStr,
         },
-      ]);
-    }, 1200);
+      });
+    }
   };
 
   // ── WHITEBOARD CANVAS ─────────────────────────────────────────
@@ -1146,16 +1379,29 @@ export const SessionScreen: React.FC = () => {
                     playsInline
                     className="w-full h-full object-contain bg-black"
                   />
+                ) : remoteStream ? (
+                  <div className="relative w-full h-full flex items-center justify-center bg-black">
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Live Peer Camera)</span>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950">
+                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3">
                     <img
                       src={activeMeeting.instructorAvatar}
                       alt={activeMeeting.instructorName}
                       className="w-24 sm:w-32 h-24 sm:h-32 rounded-full object-cover border-4 border-amber-500/50 shadow-2xl animate-pulse"
                     />
-                    <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span>{activeMeeting.instructorName} (Host / Teacher)</span>
+                    <div className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-300 text-xs font-mono-ledger font-bold flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                      <span>Waiting for peer on 2nd device to join [{activeMeeting.roomCode}]...</span>
                     </div>
                   </div>
                 )}
@@ -1190,19 +1436,22 @@ export const SessionScreen: React.FC = () => {
             {viewMode === 'grid' && (
               <div className="w-full h-full grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-4">
                 
-                {/* Tile 1: Instructor / Host */}
+                {/* Tile 1: Remote Peer / Other Device */}
                 <div className="relative w-full h-full rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
                   {isScreenSharing ? (
                     <video ref={hostVideoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />
+                  ) : remoteStream ? (
+                    <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
                   ) : (
                     <div className="text-center space-y-2">
                       <img src={activeMeeting.instructorAvatar} alt={activeMeeting.instructorName} className="w-20 h-20 rounded-full object-cover border-2 border-amber-400 mx-auto" />
                       <p className="text-xs font-bold text-white">{activeMeeting.instructorName}</p>
+                      <p className="text-[10px] text-amber-400 font-mono-ledger">Waiting for other device to join...</p>
                     </div>
                   )}
                   <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-950/80 text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                    <span>Teacher · {activeMeeting.instructorName}</span>
+                    <span className={`w-2 h-2 rounded-full ${remoteStream ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
+                    <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Peer)</span>
                   </div>
                 </div>
 
