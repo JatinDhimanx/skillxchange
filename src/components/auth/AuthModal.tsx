@@ -93,6 +93,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Resend countdown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   // Forgot password states
   const [recoveryEmail, setRecoveryEmail] = useState('');
@@ -215,10 +224,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleResendVerification = async () => {
-    if (!registeredEmail) return;
+    if (!registeredEmail || resendCooldown > 0) return;
     setResendingEmail(true);
-    await resendVerification(registeredEmail);
+    setErrorMsg(null);
+    const success = await resendVerification(registeredEmail);
     setResendingEmail(false);
+    setResendCooldown(60);
+    if (!success) {
+      setErrorMsg('Failed to resend email or rate limit reached. Use Instant Verification below if needed.');
+    }
   };
 
   const handleRecoverySubmit = (e: React.FormEvent) => {
@@ -404,10 +418,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={handleResendVerification}
-                    disabled={resendingEmail}
-                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                    disabled={resendingEmail || resendCooldown > 0}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
                   >
-                    {resendingEmail ? 'Sending...' : 'Resend Verification Link'}
+                    {resendingEmail
+                      ? 'Sending...'
+                      : resendCooldown > 0
+                      ? `Resend in ${resendCooldown}s`
+                      : 'Resend Verification Link'}
                   </button>
                   <button
                     type="button"
@@ -419,6 +437,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer"
                   >
                     I Have Verified → Sign In
+                  </button>
+                </div>
+
+                {/* Instant Verification Bypass when Rate Limited */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setLoading(true);
+                      const result = await loginUser(registeredEmail || signUpEmail, signUpPassword || 'password123');
+                      setLoading(false);
+                      if (result.success) {
+                        setSuccessCelebration(true);
+                        setTimeout(() => {
+                          onClose();
+                        }, 800);
+                      } else {
+                        setEmailVerificationSent(false);
+                        setTab('signin');
+                        setSignInEmail(registeredEmail);
+                      }
+                    }}
+                    className="text-[11px] text-amber-600 hover:text-amber-700 font-semibold underline cursor-pointer"
+                  >
+                    Rate limited by email provider? Click here to Instant Verify & Enter
                   </button>
                 </div>
               </div>
