@@ -145,7 +145,11 @@ export const SessionScreen: React.FC = () => {
   const [newRoomTopic, setNewRoomTopic] = useState('');
   const [newRoomSkill, setNewRoomSkill] = useState(currentUser?.skillsToTeach?.[0]?.skillName || 'Python & Data Science');
   const [newRoomType, setNewRoomType] = useState<'1on1' | 'open_broadcast'>('1on1');
-  const [generatedRoomCode, setGeneratedRoomCode] = useState(`ROOM-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [generatedRoomCode, setGeneratedRoomCode] = useState<string>(() => {
+    // Generate once on client; stable across re-renders.
+    // The `ROOM-` prefix keeps it URL-safe.
+    return `ROOM-${Math.floor(1000 + Math.random() * 9000)}`;
+  });
 
   const [activeMeeting, setActiveMeeting] = useState<{
     id: string;
@@ -521,18 +525,46 @@ export const SessionScreen: React.FC = () => {
         }
       };
 
+      // Re-negotiate automatically whenever a local track is added to an
+      // already-negotiated connection (e.g. camera turns on after call starts).
+      pc.onnegotiationneeded = async () => {
+        // Only the initiator should re-negotiate to avoid glare.
+        if (pc.signalingState !== 'stable') return;
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          channel.send({
+            type: 'broadcast',
+            event: 'webrtc_signal',
+            payload: {
+              type: 'sdp_offer',
+              from: localClientId.current,
+              to: targetClientId,
+              sdp: offer,
+              senderName: currentUser?.name || 'Peer',
+              senderAvatar: currentUser?.avatar || '',
+            },
+          });
+        } catch (err) {
+          console.error('Renegotiation failed:', err);
+        }
+      };
+
       return pc;
     };
 
     const sendOffer = async (targetClientId: string) => {
       const pc = getOrCreatePeerConnection(targetClientId);
+      // Don't create a duplicate offer if we're already negotiating.
+      if (pc.signalingState !== 'stable' && pc.signalingState !== 'have-local-offer') return;
+      // Already have a remote description — peer is connected, skip.
+      if (pc.remoteDescription) return;
       try {
         const offer = await pc.createOffer({
           offerToReceiveAudio: true,
           offerToReceiveVideo: true,
         });
         await pc.setLocalDescription(offer);
-
         channel.send({
           type: 'broadcast',
           event: 'webrtc_signal',
@@ -558,7 +590,30 @@ export const SessionScreen: React.FC = () => {
           name: payload.name || 'Remote Peer',
           avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
         });
+        // Reply with a pong so the newcomer knows we exist and can send us an offer too.
+        channel.send({
+          type: 'broadcast',
+          event: 'peer_pong',
+          payload: {
+            from: localClientId.current,
+            to: payload.from,
+            name: currentUser?.name || 'Peer',
+            avatar: currentUser?.avatar || '',
+          },
+        });
+        // We (existing peer) send the offer to the newcomer.
         sendOffer(payload.from);
+      })
+      .on('broadcast', { event: 'peer_pong' }, async ({ payload }) => {
+        // A peer already in the room responded to our peer_join — now we know about them.
+        if (!payload || payload.from === localClientId.current) return;
+        if (payload.to && payload.to !== localClientId.current) return;
+        setRemotePeerInfo(prev => prev ?? {
+          id: payload.from,
+          name: payload.name || 'Remote Peer',
+          avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+        });
+        // The existing peer will send us an offer; we don't race them.
       })
       .on('broadcast', { event: 'peer_leave' }, ({ payload }) => {
         if (payload && payload.from) {
@@ -1390,23 +1445,30 @@ export const SessionScreen: React.FC = () => {
                   <span className="text-amber-700">Code: {generatedRoomCode}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={`https://meet.skillexchange.org/room/${generatedRoomCode}`}
-                    className="flex-1 px-3 py-2 rounded-lg bg-white border border-amber-200 text-xs font-mono-ledger text-slate-700 select-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(`https://meet.skillexchange.org/room/${generatedRoomCode}`);
-                      showToast('Invite link copied!', 'success');
-                    }}
-                    className="p-2 rounded-lg bg-white hover:bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold transition-colors cursor-pointer"
-                    title="Copy Link"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
+                  {(() => {
+                    const inviteUrl = (typeof window !== 'undefined' ? window.location.origin : '') + `/?room=${generatedRoomCode}`;
+                    return (
+                      <>
+                        <input
+                          type="text"
+                          readOnly
+                          value={inviteUrl}
+                          className="flex-1 px-3 py-2 rounded-lg bg-white border border-amber-200 text-xs font-mono-ledger text-slate-700 select-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(inviteUrl);
+                            showToast('Invite link copied! Share this with your peer.', 'success');
+                          }}
+                          className="p-2 rounded-lg bg-white hover:bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold transition-colors cursor-pointer"
+                          title="Copy Link"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
