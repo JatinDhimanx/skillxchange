@@ -24,19 +24,6 @@ import {
   BarterSwapProposal,
   IncomingCallInvite,
 } from '../types';
-import {
-  USERS,
-  INITIAL_SKILLS,
-  SEED_SKILL_CHAINS,
-  SEED_FUTURE_COMMITMENTS,
-  SEED_TRANSCRIPT_PROOFS,
-  DYNAMIC_RATES,
-  SEED_BOUNTIES,
-  SEED_FUSION_OPTIONS,
-  SEED_PREDICTIVE_MATCHES,
-  SEED_NOTEBOOK_ENTRIES,
-  SEED_CREDENTIAL_LEDGER,
-} from '../data/seedData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase/client';
 import {
   fetchProfilesFromDB,
@@ -63,6 +50,7 @@ import {
   onAuthStateChanged,
   fetchUserProfile,
   resendVerificationEmail,
+  getAuthenticatedSession,
   SignUpData
 } from '../lib/supabase/auth';
 
@@ -233,8 +221,8 @@ export interface AppContextType {
   isAuthenticated: boolean;
   isAuthLoading: boolean;
   authModalOpen: boolean;
-  authModalTab: 'signin' | 'signup';
-  openAuthModal: (tab?: 'signin' | 'signup') => void;
+  authModalTab: 'signin' | 'signup' | 'forgot' | 'reset_password';
+  openAuthModal: (tab?: 'signin' | 'signup' | 'forgot' | 'reset_password') => void;
   closeAuthModal: () => void;
   loginUser: (email: string, pass: string) => Promise<{ success: boolean; error: string | null }>;
   registerUser: (data: SignUpData) => Promise<{ success: boolean; needsEmailVerification: boolean; error: string | null }>;
@@ -244,60 +232,36 @@ export interface AppContextType {
 
 const BLANK_GUEST_USER: UserProfile = {
   id: 'guest',
-  name: 'New Peer',
+  name: 'Guest Peer',
   handle: '@guest',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  headline: 'Frontend Developer & Aspiring AI Practitioner',
-  bio: 'Passionate about building modern web applications. Eager to barter React mentoring for Python, Machine Learning, and Guitar practice!',
-  location: 'Bangalore, India',
+  headline: 'Decentralized Peer Learner',
+  bio: 'Sign in or register to begin bartering skills on SkillXchange.',
+  location: 'India',
   timezone: 'IST (UTC+5:30)',
-  college: 'BMS Institute of Technology',
+  college: 'SkillXchange Network',
   collegeVerified: true,
-  languages: ['English', 'Hindi'],
-  skillsToTeach: [
-    {
-      skillId: 'g-teach-1',
-      skillName: 'React & Next.js Fullstack',
-      category: 'Programming & AI',
-      level: 'Intermediate',
-      yearsExperience: 2,
-      verified: true,
-      verificationBadge: 'Verified Peer',
-      hourlyRateCredits: 1.0,
-      hourlyRateInr: 400,
-      proofCount: 2,
-    },
-  ],
-  skillsToLearn: [
-    {
-      skillId: 'g-learn-1',
-      skillName: 'Python & AI Engineering',
-      targetLevel: 'Intermediate',
-      urgency: 'urgent',
-      targetDateWeeks: 6,
-      currentRoadmapStep: 1,
-      totalRoadmapSteps: 6,
-      progressPercent: 20,
-    },
-  ],
-  creditsBalance: 5.0,
+  languages: ['English'],
+  skillsToTeach: [],
+  skillsToLearn: [],
+  creditsBalance: 0,
   totalCreditsEarned: 0,
   totalCreditsSpent: 0,
   teachingHours: 0,
   learningHours: 0,
   trustScore: {
     identityVerified: false,
-    skillVerifiedCount: 1,
+    skillVerifiedCount: 0,
     completedSessions: 0,
     attendanceRate: 100,
     averageRating: 5.0,
     cancellationRate: 0,
     responseRate: 100,
     accountAgeMonths: 0,
-    overallScore: 92,
+    overallScore: 90,
   },
   streakDays: 1,
-  xpPoints: 100,
+  xpPoints: 0,
   badges: [],
   role: 'user',
 };
@@ -306,15 +270,15 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('home');
-  const [allUsers, setAllUsers] = useState<UserProfile[]>(USERS);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile>(BLANK_GUEST_USER);
-  const [skills, setSkills] = useState<Skill[]>(INITIAL_SKILLS);
+  const [skills, setSkills] = useState<Skill[]>([]);
 
   // Auth & Session State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
-  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup' | 'forgot' | 'reset_password'>('signin');
 
   // Hydrate all database data
   const hydrateAllData = async (user: UserProfile) => {
@@ -324,37 +288,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fetchSkillsFromDB(),
         fetchBountiesFromDB(),
         fetchCredentialLedgerFromDB(),
-        fetchNotebookEntriesFromDB(),
+        fetchNotebookEntriesFromDB(user.id),
       ]);
 
       if (dbProfiles && dbProfiles.length > 0) {
-        const combined = [...dbProfiles];
-        USERS.forEach(seed => {
-          if (!combined.some(p => p.id === seed.id || p.handle === seed.handle)) {
-            combined.push(seed);
-          }
-        });
-        setAllUsers(combined);
+        setAllUsers(dbProfiles);
       } else {
-        setAllUsers([user, ...USERS.filter(u => u.id !== user.id)]);
+        setAllUsers([user]);
       }
 
       if (dbSkills && dbSkills.length > 0) {
         setSkills(dbSkills);
+      } else {
+        setSkills([]);
       }
 
       if (dbBounties && dbBounties.length > 0) {
         setBounties(dbBounties);
+      } else {
+        setBounties([]);
       }
 
       if (dbLedger && dbLedger.length > 0) {
         setCredentialLedger(dbLedger);
+      } else {
+        setCredentialLedger([]);
       }
 
       if (dbNotes && dbNotes.length > 0) {
-        // Filter notes for this specific user or general guides
+        // Filter notes for this specific user
         const userNotes = dbNotes.filter(n => !(n as any).userId || (n as any).userId === user.id);
-        setNotebookEntries(userNotes.length > 0 ? userNotes : dbNotes);
+        setNotebookEntries(userNotes);
+      } else {
+        setNotebookEntries([]);
       }
 
       // User specific private transaction history
@@ -402,22 +368,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     setIsAuthLoading(true);
 
-    const unsubscribe = onAuthStateChanged(async (event, session) => {
+    // Initial check of active session
+    getAuthenticatedSession().then(async session => {
       if (session?.user) {
         const profile = await fetchUserProfile(session.user.id);
         if (profile) {
           setCurrentUser(profile);
           setIsAuthenticated(true);
-          setAuthModalOpen(false);
+          try {
+            localStorage.setItem('skillxchange_active_user', JSON.stringify(profile));
+          } catch {}
+          hydrateAllData(profile);
+        }
+      }
+      setIsAuthLoading(false);
+    });
+
+    const unsubscribe = onAuthStateChanged(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthModalTab('reset_password');
+        setAuthModalOpen(true);
+        return;
+      }
+
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user.id);
+        if (profile) {
+          setCurrentUser(profile);
+          setIsAuthenticated(true);
+          if (event !== 'PASSWORD_RECOVERY') {
+            setAuthModalOpen(false);
+          }
           try {
             localStorage.setItem('skillxchange_active_user', JSON.stringify(profile));
           } catch {}
           hydrateAllData(profile);
         }
       } else {
-        // Supabase explicitly says there is no active session.
-        // Clear any stale localStorage data so a new user on the same
-        // device doesn't accidentally inherit the previous user's profile.
+        // Clear stale local data on logout / invalid session
         try {
           localStorage.removeItem('skillxchange_active_user');
         } catch {}
@@ -433,7 +421,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  const openAuthModal = (tab: 'signin' | 'signup' = 'signin') => {
+  const openAuthModal = (tab: 'signin' | 'signup' | 'forgot' | 'reset_password' = 'signin') => {
     setAuthModalTab(tab);
     setAuthModalOpen(true);
   };
@@ -476,9 +464,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      setIsAuthenticated(true);
-      showToast('Logged in successfully.', 'success');
-      return { success: true, error: null };
+      return {
+        success: false,
+        error: 'Invalid username/email or password. If you do not have an account, please register first.',
+      };
     } catch (err: any) {
       return { success: false, error: err.message };
     } finally {
@@ -579,6 +568,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await signOutUser();
     setIsAuthenticated(false);
     setCurrentUser(BLANK_GUEST_USER);
+    setTransactions([]);
+    setNotifications([]);
+    setPeerConversations({});
+    setSwapProposals([]);
+    setNotebookEntries([]);
     try {
       localStorage.removeItem('skillxchange_active_user');
     } catch {}
@@ -587,34 +581,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Innovation States
-  const [skillChains, setSkillChains] = useState<SkillChain[]>(SEED_SKILL_CHAINS);
-  const [futureCommitments, setFutureCommitments] = useState<FutureCommitment[]>(SEED_FUTURE_COMMITMENTS);
-  const [transcriptProofs, setTranscriptProofs] = useState<SessionTranscriptProof[]>(SEED_TRANSCRIPT_PROOFS);
+  const [skillChains, setSkillChains] = useState<SkillChain[]>([]);
+  const [futureCommitments, setFutureCommitments] = useState<FutureCommitment[]>([]);
+  const [transcriptProofs, setTranscriptProofs] = useState<SessionTranscriptProof[]>([]);
   const [activeQuizProof, setActiveQuizProof] = useState<SessionTranscriptProof | null>(null);
-  const [dynamicRates, setDynamicRates] = useState<DynamicSkillRate[]>(DYNAMIC_RATES);
-  const [bounties, setBounties] = useState<SkillBounty[]>(SEED_BOUNTIES);
-  const [fusionOptions] = useState<FusionSessionOption[]>(SEED_FUSION_OPTIONS);
-  const [predictiveMatches] = useState<PredictiveMatch[]>(SEED_PREDICTIVE_MATCHES);
-  const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>(SEED_NOTEBOOK_ENTRIES);
+  const [dynamicRates, setDynamicRates] = useState<DynamicSkillRate[]>([]);
+  const [bounties, setBounties] = useState<SkillBounty[]>([]);
+  const [fusionOptions] = useState<FusionSessionOption[]>([]);
+  const [predictiveMatches] = useState<PredictiveMatch[]>([]);
+  const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [searchQueryNotebook, setSearchQueryNotebook] = useState<string>('');
-  const [credentialLedger, setCredentialLedger] = useState<CredentialBlock[]>(SEED_CREDENTIAL_LEDGER);
+  const [credentialLedger, setCredentialLedger] = useState<CredentialBlock[]>([]);
 
   // Dynamic Transaction Ledger (Starts clean for new users or loads from DB)
-  const [transactions, setTransactions] = useState<LedgerTransaction[]>([
-    { id: 'TXN-GENESIS-01', date: new Date().toISOString().split('T')[0], desc: 'Initial Account Credit Grant', delta: +5.0, balance: 5.0 },
-  ]);
+  const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
 
   // Notifications (Starts clean or loads from DB)
-  const [notifications, setNotifications] = useState<ActivityNotification[]>([
-    {
-      id: 'notif-welcome',
-      title: 'Welcome to SkillXchange!',
-      desc: 'Your decentralized account is verified. Connect with peers or post a learning bounty.',
-      time: 'Just now',
-      type: 'match',
-      read: false,
-    },
-  ]);
+  const [notifications, setNotifications] = useState<ActivityNotification[]>([]);
 
   // Soft Skills Practice State
   const [isPracticingSoftSkills, setIsPracticingSoftSkills] = useState(false);
@@ -848,6 +831,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const switchUser = (userId: string) => {
+    if (isAuthenticated) {
+      showToast('Signed in with active Supabase session. Sign out to switch accounts.', 'info');
+      return;
+    }
     const user = allUsers.find(u => u.id === userId);
     if (user) {
       setCurrentUser(user);
@@ -1124,6 +1111,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Actions
   const sendExchangeProposal = (targetUserId: string, offeredSkill: string, wantedSkill: string, notes?: string) => {
+    // 1. Authorization check
+    if (!currentUser.id || currentUser.id === 'guest') {
+      openAuthModal('signin');
+      showToast('Please sign in to send barter exchange proposals.', 'warning');
+      return;
+    }
+
+    // 2. Prevent sending request to self
+    if (targetUserId === currentUser.id) {
+      showToast('You cannot send a barter proposal to yourself.', 'warning');
+      return;
+    }
+
+    // 3. Prevent duplicate requests with same skills
+    const isDuplicate = swapProposals.some(
+      p =>
+        p.senderId === currentUser.id &&
+        p.receiverId === targetUserId &&
+        p.status === 'pending' &&
+        p.offeredSkill.toLowerCase() === offeredSkill.toLowerCase() &&
+        p.wantedSkill.toLowerCase() === wantedSkill.toLowerCase()
+    );
+    if (isDuplicate) {
+      showToast('A pending barter proposal for these skills already exists with this peer.', 'warning');
+      return;
+    }
+
     const target = allUsers.find(u => u.id === targetUserId);
     const targetName = target?.name || 'Peer';
     const targetAvatar = target?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
@@ -1136,11 +1150,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       receiverId: targetUserId,
       receiverName: targetName,
       receiverAvatar: targetAvatar,
-      offeredSkill,
-      wantedSkill,
+      offeredSkill: offeredSkill.trim(),
+      wantedSkill: wantedSkill.trim(),
       status: 'pending',
       proposedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      notes: notes || '1-on-1 Bilateral Skill Swap (0 INR, Escrow Protected)',
+      notes: notes?.trim() || '1-on-1 Bilateral Skill Swap (0 INR, Escrow Protected)',
       escrowCredits: 1.0,
     };
 
@@ -1174,7 +1188,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     showToast(`Bilateral barter request sent to ${targetName}! (${offeredSkill} ⇄ ${wantedSkill})`, 'success');
 
-    // Auto peer response & acceptance simulation
+    // Auto peer response simulation for demo peers
     setTimeout(() => {
       acceptExchangeProposal(newProposal.id, true);
     }, 2800);
@@ -1185,6 +1199,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setSwapProposals(prev => {
       targetProp = prev.find(p => p.id === proposalId);
+      // Authorization & state transition check: only pending proposals can be accepted
+      if (!targetProp || targetProp.status !== 'pending') {
+        return prev;
+      }
       const updated = prev.map(p => (p.id === proposalId ? { ...p, status: 'accepted' as const } : p));
       if (typeof window !== 'undefined' && currentUser.id) {
         try {
@@ -1193,6 +1211,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return updated;
     });
+
+    if (!targetProp || targetProp.status !== 'pending') return;
 
     setTimeout(() => {
       const peerName = targetProp ? (isFromPeer ? targetProp.receiverName : targetProp.senderName) : 'Peer';
@@ -1228,6 +1248,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const declineExchangeProposal = (proposalId: string) => {
     setSwapProposals(prev => {
+      const target = prev.find(p => p.id === proposalId);
+      if (!target || target.status !== 'pending') return prev;
       const updated = prev.map(p => (p.id === proposalId ? { ...p, status: 'declined' as const } : p));
       if (typeof window !== 'undefined' && currentUser.id) {
         try {

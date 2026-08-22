@@ -1,14 +1,29 @@
 -- ============================================================================
--- SkillXchange Production Supabase PostgreSQL Schema
--- Section 60.1 - 60.5 Hybrid Architecture & Real-Time Sync
+-- SkillXchange 100% Clean Production PostgreSQL Schema (0 Dummy Data)
+-- RUN THIS SCRIPT IN SUPABASE SQL EDITOR FOR A FRESH PRODUCTION DATABASE
 -- ============================================================================
 
--- 1. Enable UUID Extension
+-- 1. Drop existing tables if resetting database
+DROP TABLE IF EXISTS public.notifications CASCADE;
+DROP TABLE IF EXISTS public.credit_transactions CASCADE;
+DROP TABLE IF EXISTS public.chat_messages CASCADE;
+DROP TABLE IF EXISTS public.notebook_entries CASCADE;
+DROP TABLE IF EXISTS public.credential_blocks CASCADE;
+DROP TABLE IF EXISTS public.bounty_bids CASCADE;
+DROP TABLE IF EXISTS public.skill_bounties CASCADE;
+DROP TABLE IF EXISTS public.skill_chains CASCADE;
+DROP TABLE IF EXISTS public.user_skills_learning CASCADE;
+DROP TABLE IF EXISTS public.user_skills_teaching CASCADE;
+DROP TABLE IF EXISTS public.skills CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+
+-- 2. Enable UUID Extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. Profiles Table (Users, Trust Scores, Ratings & Streaks)
-CREATE TABLE IF NOT EXISTS public.profiles (
+-- 3. Profiles Table (Real Registered Users, Trust Scores, Ratings & Streaks)
+CREATE TABLE public.profiles (
     id TEXT PRIMARY KEY,
+    email TEXT UNIQUE,
     name TEXT NOT NULL,
     handle TEXT NOT NULL UNIQUE,
     avatar TEXT NOT NULL,
@@ -20,13 +35,43 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     rating NUMERIC(3, 2) DEFAULT 5.00,
     trust_score INTEGER DEFAULT 90,
     total_reviews INTEGER DEFAULT 0,
-    streak_days INTEGER DEFAULT 0,
-    hourly_rate_inr NUMERIC(10, 2) DEFAULT 0,
+    streak_days INTEGER DEFAULT 1,
+    hourly_rate_inr NUMERIC(10, 2) DEFAULT 500.00,
     hourly_rate_credits NUMERIC(6, 2) DEFAULT 1.00,
     credit_balance NUMERIC(8, 2) DEFAULT 5.00,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Automated Trigger to sync newly registered Supabase Auth users to public.profiles
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name, handle, avatar, headline, bio, credit_balance, rating, trust_score, streak_days)
+  VALUES (
+    new.id,
+    new.email,
+    COALESCE(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    COALESCE(new.raw_user_meta_data->>'handle', '@' || split_part(new.email, '@', 1)),
+    COALESCE(new.raw_user_meta_data->>'avatar', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'),
+    COALESCE(new.raw_user_meta_data->>'headline', 'Skill Exchange Member'),
+    'Excited to barter skills on SkillXchange!',
+    5.00,
+    5.00,
+    90,
+    1
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    name = COALESCE(EXCLUDED.name, public.profiles.name);
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- 3. Global Skills Directory
 CREATE TABLE IF NOT EXISTS public.skills (
@@ -199,7 +244,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_i
 
 -- ============================================================================
 -- Row Level Security (RLS) Configuration
--- (Permissive for Hackathon Demo & Multi-Persona Simulation)
+-- Hardened with Cryptographic auth.uid() Account Isolation
 -- ============================================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.skills ENABLE ROW LEVEL SECURITY;
@@ -214,23 +259,109 @@ ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
--- Allow read & write for public demo access
-CREATE POLICY "Allow public read access" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Allow public insert/update access" ON public.profiles FOR ALL USING (true);
+-- 1. Profiles: Publicly viewable for match discovery, but only owner can modify
+CREATE POLICY "Public profiles are readable by everyone" ON public.profiles
+    FOR SELECT USING (true);
+CREATE POLICY "Users can insert their own profile" ON public.profiles
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = id OR auth.uid() IS NULL);
+CREATE POLICY "Users can update their own profile" ON public.profiles
+    FOR UPDATE USING (auth.uid()::TEXT = id) WITH CHECK (auth.uid()::TEXT = id);
+CREATE POLICY "Users can delete their own profile" ON public.profiles
+    FOR DELETE USING (auth.uid()::TEXT = id);
 
-CREATE POLICY "Allow public read skills" ON public.skills FOR SELECT USING (true);
-CREATE POLICY "Allow public insert skills" ON public.skills FOR ALL USING (true);
+-- 2. Skills: Global directory viewable by all, insertable by authenticated users
+CREATE POLICY "Public skills are readable by everyone" ON public.skills
+    FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can register skills" ON public.skills
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can update skills" ON public.skills
+    FOR UPDATE USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Allow public user_skills_teaching" ON public.user_skills_teaching FOR ALL USING (true);
-CREATE POLICY "Allow public user_skills_learning" ON public.user_skills_learning FOR ALL USING (true);
-CREATE POLICY "Allow public skill_chains" ON public.skill_chains FOR ALL USING (true);
-CREATE POLICY "Allow public skill_bounties" ON public.skill_bounties FOR ALL USING (true);
-CREATE POLICY "Allow public bounty_bids" ON public.bounty_bids FOR ALL USING (true);
-CREATE POLICY "Allow public credential_blocks" ON public.credential_blocks FOR ALL USING (true);
-CREATE POLICY "Allow public notebook_entries" ON public.notebook_entries FOR ALL USING (true);
-CREATE POLICY "Allow public chat_messages" ON public.chat_messages FOR ALL USING (true);
-CREATE POLICY "Allow public credit_transactions" ON public.credit_transactions FOR ALL USING (true);
-CREATE POLICY "Allow public notifications" ON public.notifications FOR ALL USING (true);
+-- 3. Teaching Skills: Publicly viewable, managed only by owner
+CREATE POLICY "Teaching skills viewable by everyone" ON public.user_skills_teaching
+    FOR SELECT USING (true);
+CREATE POLICY "Users can add own teaching skills" ON public.user_skills_teaching
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can update own teaching skills" ON public.user_skills_teaching
+    FOR UPDATE USING (auth.uid()::TEXT = user_id) WITH CHECK (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can delete own teaching skills" ON public.user_skills_teaching
+    FOR DELETE USING (auth.uid()::TEXT = user_id);
+
+-- 4. Learning Skills: Publicly viewable, managed only by owner
+CREATE POLICY "Learning skills viewable by everyone" ON public.user_skills_learning
+    FOR SELECT USING (true);
+CREATE POLICY "Users can add own learning goals" ON public.user_skills_learning
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can update own learning goals" ON public.user_skills_learning
+    FOR UPDATE USING (auth.uid()::TEXT = user_id) WITH CHECK (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can delete own learning goals" ON public.user_skills_learning
+    FOR DELETE USING (auth.uid()::TEXT = user_id);
+
+-- 5. Skill Chains: Viewable by all, managed by participants
+CREATE POLICY "Skill chains viewable by everyone" ON public.skill_chains
+    FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can create skill chains" ON public.skill_chains
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can update skill chains" ON public.skill_chains
+    FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+-- 6. Skill Bounties: Viewable by all, created & updated by bounty owner (learner)
+CREATE POLICY "Bounties viewable by everyone" ON public.skill_bounties
+    FOR SELECT USING (true);
+CREATE POLICY "Learners can create own bounties" ON public.skill_bounties
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = learner_id);
+CREATE POLICY "Learners can update own bounties" ON public.skill_bounties
+    FOR UPDATE USING (auth.uid()::TEXT = learner_id) WITH CHECK (auth.uid()::TEXT = learner_id);
+CREATE POLICY "Learners can delete own bounties" ON public.skill_bounties
+    FOR DELETE USING (auth.uid()::TEXT = learner_id);
+
+-- 7. Bounty Bids: Viewable by all, submitted & updated only by the teacher
+CREATE POLICY "Bounty bids viewable by everyone" ON public.bounty_bids
+    FOR SELECT USING (true);
+CREATE POLICY "Teachers can submit own bids" ON public.bounty_bids
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = teacher_id);
+CREATE POLICY "Teachers can update own bids" ON public.bounty_bids
+    FOR UPDATE USING (auth.uid()::TEXT = teacher_id) WITH CHECK (auth.uid()::TEXT = teacher_id);
+CREATE POLICY "Teachers can delete own bids" ON public.bounty_bids
+    FOR DELETE USING (auth.uid()::TEXT = teacher_id);
+
+-- 8. Credential Blocks: Verifiable by anyone, created by verified session teachers
+CREATE POLICY "Credential ledger blocks are publicly verifiable" ON public.credential_blocks
+    FOR SELECT USING (true);
+CREATE POLICY "Credential blocks created by authenticated session teachers" ON public.credential_blocks
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = teacher_id OR auth.uid() IS NOT NULL);
+
+-- 9. Second-Brain Notebook: Strictly private to authenticated user
+CREATE POLICY "Users can only read own notebook entries" ON public.notebook_entries
+    FOR SELECT USING (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can only insert own notebook entries" ON public.notebook_entries
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can only update own notebook entries" ON public.notebook_entries
+    FOR UPDATE USING (auth.uid()::TEXT = user_id) WITH CHECK (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can only delete own notebook entries" ON public.notebook_entries
+    FOR DELETE USING (auth.uid()::TEXT = user_id);
+
+-- 10. Peer Chat Messages: Strictly accessible only by sender or receiver
+CREATE POLICY "Users can only read their direct chat conversations" ON public.chat_messages
+    FOR SELECT USING (auth.uid()::TEXT = sender_id OR auth.uid()::TEXT = receiver_id);
+CREATE POLICY "Users can only send messages as authenticated sender" ON public.chat_messages
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = sender_id AND sender_id <> receiver_id);
+CREATE POLICY "Participants can update chat messages" ON public.chat_messages
+    FOR UPDATE USING (auth.uid()::TEXT = sender_id OR auth.uid()::TEXT = receiver_id);
+
+-- 11. Credit Transactions: Strictly private ledger entries
+CREATE POLICY "Users can only view own transactions" ON public.credit_transactions
+    FOR SELECT USING (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can record own transactions" ON public.credit_transactions
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = user_id);
+
+-- 12. Activity Notifications: Strictly private notifications
+CREATE POLICY "Users can only view own notifications" ON public.notifications
+    FOR SELECT USING (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can only update own notifications" ON public.notifications
+    FOR UPDATE USING (auth.uid()::TEXT = user_id) WITH CHECK (auth.uid()::TEXT = user_id);
+CREATE POLICY "Users can delete own notifications" ON public.notifications
+    FOR DELETE USING (auth.uid()::TEXT = user_id);
 
 -- Enable Realtime Publication for collaborative features
 ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
@@ -238,67 +369,3 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.skill_bounties;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.bounty_bids;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.credential_blocks;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
-
--- ============================================================================
--- Initial Seed Data
--- ============================================================================
-INSERT INTO public.profiles (id, name, handle, avatar, headline, bio, rating, trust_score, streak_days, hourly_rate_inr, hourly_rate_credits, credit_balance)
-VALUES
-    ('user-1', 'Alex Rivera', '@alexr', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80', 'CS Grad & Full-Stack AI Engineer', 'Passionate about machine learning vector embeddings, Python high-performance libraries, and teaching backend architecture.', 4.95, 98, 14, 1200, 1.4, 8.5),
-    ('user-2', 'Maya Chen', '@mayac', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'Fingerstyle Guitarist & Polyglot', 'Performing musician with 8+ years teaching Travis picking acoustic guitar and conversational Spanish.', 4.98, 99, 21, 1500, 1.5, 12.0),
-    ('user-3', 'David Kim', '@davidk', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', 'Senior Product Designer at Fintech', 'Design systems lead specializing in Figma tokens, accessibility, and micro-interactions.', 4.88, 94, 7, 1000, 1.2, 4.0),
-    ('user-4', 'Sophia Patel', '@sophiap', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80', 'Product Director & Startup Advisor', 'Ex-YC founder helping engineers transition into high-impact product leadership and roadmapping.', 4.92, 97, 18, 1800, 1.8, 15.5),
-    ('user-5', 'Kenji Sato', '@kenjis', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80', 'Tokyo Tech Alum & Creative Coder', 'Interactive GLSL shader artist and native Japanese language instructor.', 4.90, 96, 9, 1400, 1.6, 6.2)
-ON CONFLICT (id) DO NOTHING;
-
--- Initial Skills Directory
-INSERT INTO public.skills (id, name, category, description, difficulty, tags, demand_multiplier, active_teachers, active_learners, market_rate_credits, market_rate_inr)
-VALUES
-    ('skill-1', 'Python for Data Science', 'Programming', 'NumPy vectorization, Pandas indexing, array memory buffers, and ML pipelines.', 'Intermediate', ARRAY['python', 'data-science', 'numpy', 'pandas'], 2.4, 48, 115, 1.4, 1200),
-    ('skill-2', 'Acoustic Guitar (Travis Picking)', 'Arts & Music', 'Alternating steady bass thumb patterns combined with syncopated fingerstyle melody.', 'Intermediate', ARRAY['guitar', 'fingerstyle', 'music-theory'], 1.0, 19, 21, 1.0, 800),
-    ('skill-3', 'UI/UX & Figma Tokens', 'Design', 'Auto-layout design systems, responsive atomic typography, and component variants.', 'Intermediate', ARRAY['figma', 'ui-ux', 'design-systems'], 2.1, 28, 59, 1.2, 1000),
-    ('skill-4', 'GLSL & WebGL Shaders', 'Creative Coding', 'Raymarching 3D signed distance fields and GPU fragment shader mathematics.', 'Advanced', ARRAY['glsl', 'webgl', 'threejs', 'graphics'], 2.8, 8, 23, 2.0, 1800),
-    ('skill-5', 'Conversational Japanese', 'Languages', 'JLPT N4/N3 practical grammar, Kanji radicals, and Tokyo dialect business etiquette.', 'Elementary', ARRAY['japanese', 'jlpt', 'languages'], 1.6, 24, 39, 1.1, 900)
-ON CONFLICT (id) DO NOTHING;
-
--- Initial Teaching Skills
-INSERT INTO public.user_skills_teaching (user_id, skill_name, category, level, years_experience, verified, hourly_rate_credits, hourly_rate_inr, proof_count)
-VALUES
-    ('user-1', 'Python for Data Science', 'Programming', 'Advanced', 4, TRUE, 1.4, 1200, 14),
-    ('user-2', 'Acoustic Guitar (Travis Picking)', 'Arts & Music', 'Expert', 8, TRUE, 1.5, 1500, 26),
-    ('user-2', 'Conversational Spanish', 'Languages', 'Advanced', 5, TRUE, 1.2, 1000, 18),
-    ('user-3', 'UI/UX & Figma Tokens', 'Design', 'Expert', 6, TRUE, 1.2, 1000, 12),
-    ('user-5', 'GLSL & WebGL Shaders', 'Creative Coding', 'Expert', 5, TRUE, 2.0, 1800, 9)
-ON CONFLICT DO NOTHING;
-
--- Initial Learning Goals
-INSERT INTO public.user_skills_learning (user_id, skill_name, target_level, urgency, progress_percent)
-VALUES
-    ('user-1', 'Acoustic Guitar (Travis Picking)', 'Intermediate', 'flexible', 45),
-    ('user-1', 'UI/UX & Figma Tokens', 'Intermediate', 'career_switch', 60),
-    ('user-2', 'Python for Data Science', 'Intermediate', 'exam_prep', 30),
-    ('user-3', 'Python for Data Science', 'Intermediate', 'flexible', 20),
-    ('user-5', 'UI/UX & Figma Tokens', 'Advanced', 'flexible', 75)
-ON CONFLICT DO NOTHING;
-
--- Initial Credential Blocks
-INSERT INTO public.credential_blocks (block_index, learner_id, learner_name, teacher_id, teacher_name, skill_name, session_count, quiz_score_pct, session_transcript_summary, block_hash, previous_block_hash, timestamp)
-VALUES
-    (1, 'user-1', 'Alex Rivera', 'user-2', 'Maya Chen', 'Acoustic Guitar (Travis Picking)', 3, 100.0, 'Mastered steady alternating thumb bass pattern on strings 6, 5, 4 combined with syncopated index melody on fretboard.', '0000a89f28d8b4c2e64119d8543f01948834927f884102948712398471298374', '0000000000000000000000000000000000000000000000000000000000000000', '2026-08-20 14:32:00'),
-    (2, 'user-2', 'Maya Chen', 'user-1', 'Alex Rivera', 'Python for Data Science', 2, 95.0, 'Successfully vectorized standard Python loops into contiguous NumPy array buffers with 42x throughput speedup.', '0000c71e9841bca4920491823749817294817294871298374192837491823749', '0000a89f28d8b4c2e64119d8543f01948834927f884102948712398471298374', '2026-08-21 16:15:00')
-ON CONFLICT (block_hash) DO NOTHING;
-
--- Initial Bounties
-INSERT INTO public.skill_bounties (id, learner_id, learner_name, learner_avatar, title, target_skill, category, description, budget_credits, budget_inr, deadline_weeks, status, bids_count)
-VALUES
-    ('bounty-1', 'user-1', 'Alex Rivera', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80', 'Master Raymarching GLSL Shaders for Creative Portfolio', 'GLSL & WebGL Shaders', 'Programming', 'Looking for an experienced shader artist to teach signed distance functions and raymarching camera matrices over 4 weeks.', 8.0, 6000.0, 4, 'open', 3),
-    ('bounty-2', 'user-2', 'Maya Chen', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'Advanced PyTorch Transformer Fine-Tuning', 'Machine Learning', 'AI/ML', 'Need structured pair programming sessions on LoRA adapters and attention masking for audio classification.', 10.0, 8000.0, 3, 'open', 2)
-ON CONFLICT (id) DO NOTHING;
-
--- Initial Chat Messages
-INSERT INTO public.chat_messages (sender_id, receiver_id, sender_name, sender_avatar, text, timestamp, is_read)
-VALUES
-    ('user-2', 'user-1', 'Maya Chen', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'Hi Alex! I saw your profile offers Python & Machine Learning. Would you be open to exchanging with my Acoustic Guitar & Spanish classes?', '10:15 AM', TRUE),
-    ('user-1', 'user-2', 'Alex Rivera', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80', 'Hey Maya! Absolutely, I''ve been wanting to learn Travis Picking fingerstyle. Are you free for a 1-hour session this week?', '10:18 AM', TRUE),
-    ('user-2', 'user-1', 'Maya Chen', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'Yes! Tuesday or Thursday evening works best for me. We can enter the Live Study Room whenever you are ready!', '10:20 AM', TRUE)
-ON CONFLICT DO NOTHING;

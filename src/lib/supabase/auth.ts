@@ -118,68 +118,11 @@ export async function signUpUser(data: SignUpData): Promise<{
     `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`;
 
   if (!isSupabaseConfigured || !supabase) {
-    // Local fallback
-    const localUser: UserProfile = {
-      id: `user-${Date.now()}`,
-      name: data.name,
-      handle: data.handle.startsWith('@') ? data.handle : `@${data.handle}`,
-      avatar: avatarUrl,
-      headline: data.headline || 'Skill Exchange Enthusiast',
-      bio: `Hello! I am ${data.name}. Excited to barter skills on SkillXchange.`,
-      location: 'India',
-      timezone: 'IST (UTC+5:30)',
-      college: 'Peer Network',
-      collegeVerified: true,
-      languages: ['English'],
-      skillsToTeach: data.teachSkill
-        ? [
-            {
-              skillId: `teach-${Date.now()}`,
-              skillName: data.teachSkill,
-              category: 'General',
-              level: 'Intermediate',
-              yearsExperience: 1,
-              verified: true,
-              verificationBadge: 'Verified Peer',
-              hourlyRateInr: 500,
-              hourlyRateCredits: 1.0,
-              proofCount: 1,
-            },
-          ]
-        : [],
-      skillsToLearn: data.learnSkill
-        ? [
-            {
-              skillId: `learn-${Date.now()}`,
-              skillName: data.learnSkill,
-              targetLevel: 'Intermediate',
-              urgency: 'flexible',
-              progressPercent: 0,
-            },
-          ]
-        : [],
-      creditsBalance: 5.0,
-      totalCreditsEarned: 0,
-      totalCreditsSpent: 0,
-      teachingHours: 0,
-      learningHours: 0,
-      trustScore: {
-        identityVerified: true,
-        skillVerifiedCount: 1,
-        completedSessions: 0,
-        attendanceRate: 100,
-        averageRating: 5.0,
-        cancellationRate: 0,
-        responseRate: 100,
-        accountAgeMonths: 0,
-        overallScore: 90,
-      },
-      streakDays: 1,
-      xpPoints: 100,
-      badges: [],
-      role: 'user',
+    return {
+      user: null,
+      needsEmailVerification: false,
+      error: 'Supabase is not configured. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local to connect to your live database.',
     };
-    return { user: localUser, needsEmailVerification: false, error: null };
   }
 
   try {
@@ -298,6 +241,7 @@ export async function signUpUser(data: SignUpData): Promise<{
     // Create profile in profiles table
     await supabase.from('profiles').upsert({
       id: userId,
+      email: data.email.trim().toLowerCase(),
       name: data.name,
       handle: handleClean,
       avatar: avatarUrl,
@@ -420,28 +364,65 @@ export async function signInUser(data: SignInData): Promise<{
   error: string | null;
 }> {
   if (!isSupabaseConfigured || !supabase) {
-    return { user: null, session: { user: { email: data.email } }, error: null };
+    return {
+      user: null,
+      session: null,
+      error: 'Supabase is not configured. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local to connect to your live database.',
+    };
   }
 
   try {
+    let loginEmail = data.email.trim();
+
+    // Support signing in with either email address or @handle / username
+    if (!loginEmail.includes('@') || loginEmail.startsWith('@')) {
+      const handleQuery = loginEmail.startsWith('@') ? loginEmail : `@${loginEmail}`;
+      const { data: profileByHandle } = await supabase
+        .from('profiles')
+        .select('email, id')
+        .ilike('handle', handleQuery)
+        .maybeSingle();
+
+      if (profileByHandle?.email) {
+        loginEmail = profileByHandle.email;
+      }
+    }
+
     const { data: authData, error } = await supabase.auth.signInWithPassword({
-      email: data.email,
+      email: loginEmail,
       password: data.password,
     });
 
     if (error) {
-      if (error.message.toLowerCase().includes('email not confirmed')) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes('email not confirmed')) {
         return {
           user: null,
           session: null,
           error: 'Please verify your email address. Check your inbox and click the confirmation link sent by Supabase.',
         };
       }
+      if (
+        msg.includes('invalid login credentials') ||
+        msg.includes('invalid credentials') ||
+        msg.includes('user not found') ||
+        msg.includes('invalid_grant')
+      ) {
+        return {
+          user: null,
+          session: null,
+          error: 'Invalid username/email or password. If you do not have an account, please register first.',
+        };
+      }
       return { user: null, session: null, error: error.message };
     }
 
     if (!authData.user) {
-      return { user: null, session: null, error: 'User not found.' };
+      return {
+        user: null,
+        session: null,
+        error: 'Invalid username/email or password. If you do not have an account, please register first.',
+      };
     }
 
     // Fetch full profile from DB
@@ -449,7 +430,7 @@ export async function signInUser(data: SignInData): Promise<{
 
     return { user: profile, session: authData.session, error: null };
   } catch (err: any) {
-    return { user: null, session: null, error: err.message || 'Sign in failed.' };
+    return { user: null, session: null, error: err.message || 'Sign in failed. Please check your credentials.' };
   }
 }
 
@@ -459,7 +440,7 @@ export async function resendVerificationEmail(email: string): Promise<{ error: s
   try {
     const { error } = await supabase.auth.resend({
       type: 'signup',
-      email,
+      email: email.trim(),
     });
     if (error) {
       const errMsg = error.message.toLowerCase();
@@ -470,7 +451,7 @@ export async function resendVerificationEmail(email: string): Promise<{ error: s
         errMsg.includes('security purposes')
       ) {
         return {
-          error: 'Email rate limit reached for this IP/device. Please wait 60s or use Instant Verification.',
+          error: 'Email rate limit reached for this IP/device. Please wait 60s before trying again.',
         };
       }
       return { error: error.message };
@@ -481,7 +462,67 @@ export async function resendVerificationEmail(email: string): Promise<{ error: s
   }
 }
 
-// ── 5. Sign Out User ─────────────────────────────────────────────────────────
+// ── 5. Send Password Reset Email ─────────────────────────────────────────────
+export async function sendPasswordResetEmail(email: string): Promise<{ error: string | null }> {
+  if (!isSupabaseConfigured || !supabase) {
+    return { error: null };
+  }
+  try {
+    const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}` : undefined;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo,
+    });
+    if (error) {
+      const errMsg = error.message.toLowerCase();
+      if (
+        errMsg.includes('rate limit') ||
+        errMsg.includes('over_email_send_rate_limit') ||
+        (error as any).status === 429 ||
+        errMsg.includes('security purposes')
+      ) {
+        return {
+          error: 'Password reset email rate limit reached. Please wait a minute before requesting another link.',
+        };
+      }
+      return { error: error.message };
+    }
+    return { error: null };
+  } catch (err: any) {
+    return { error: err.message || 'Failed to send password reset email.' };
+  }
+}
+
+// ── 6. Update User Password (New Password Creation) ──────────────────────────
+export async function updateUserPassword(newPassword: string): Promise<{ error: string | null }> {
+  if (!isSupabaseConfigured || !supabase) {
+    return { error: null };
+  }
+  try {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) {
+      return { error: error.message };
+    }
+    return { error: null };
+  } catch (err: any) {
+    return { error: err.message || 'Failed to update password.' };
+  }
+}
+
+// ── 7. Get Authenticated Session ─────────────────────────────────────────────
+export async function getAuthenticatedSession() {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) return null;
+    return data.session;
+  } catch {
+    return null;
+  }
+}
+
+// ── 8. Sign Out User ─────────────────────────────────────────────────────────
 export async function signOutUser(): Promise<{ error: string | null }> {
   if (!isSupabaseConfigured || !supabase) {
     return { error: null };
@@ -495,7 +536,7 @@ export async function signOutUser(): Promise<{ error: string | null }> {
   }
 }
 
-// ── 6. Listen to Auth Changes & Session Recovery ─────────────────────────────
+// ── 9. Listen to Auth Changes & Session Recovery ─────────────────────────────
 export function onAuthStateChanged(callback: (event: string, session: any) => void) {
   if (!isSupabaseConfigured || !supabase) return () => {};
   const { data: subscription } = supabase.auth.onAuthStateChange(callback);

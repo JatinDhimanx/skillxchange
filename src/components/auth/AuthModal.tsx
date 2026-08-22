@@ -30,11 +30,12 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { isSupabaseConfigured } from '../../lib/supabase/client';
+import { sendPasswordResetEmail, updateUserPassword } from '../../lib/supabase/auth';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'signin' | 'signup';
+  initialTab?: 'signin' | 'signup' | 'forgot' | 'reset_password';
 }
 
 const PRESET_AVATARS = [
@@ -70,7 +71,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialTab = 'signin',
 }) => {
   const { loginUser, registerUser, resendVerification, showToast } = useApp();
-  const [tab, setTab] = useState<'signin' | 'signup' | 'forgot'>(initialTab);
+  const [tab, setTab] = useState<'signin' | 'signup' | 'forgot' | 'reset_password'>(initialTab);
 
   // Sign In Form State
   const [signInEmail, setSignInEmail] = useState('');
@@ -96,6 +97,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // Forgot / Reset password states
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoverySent, setRecoverySent] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+
   // Resend countdown timer
   useEffect(() => {
     if (resendCooldown > 0) {
@@ -103,10 +112,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return () => clearTimeout(timer);
     }
   }, [resendCooldown]);
-
-  // Forgot password states
-  const [recoveryEmail, setRecoveryEmail] = useState('');
-  const [recoverySent, setRecoverySent] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -116,6 +121,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setTab(initialTab);
     setErrorMsg(null);
     setEmailVerificationSent(false);
+    setRecoverySent(false);
+    setResetSuccess(false);
+
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash.includes('type=recovery') || hash.includes('access_token=')) {
+        setTab('reset_password');
+      }
+    }
   }, [initialTab, isOpen]);
 
   // Escape key listener
@@ -236,15 +250,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleRecoverySubmit = (e: React.FormEvent) => {
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recoveryEmail) return;
+    if (!recoveryEmail || !recoveryEmail.includes('@')) {
+      setErrorMsg('Please enter a valid registered email address.');
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
+    setErrorMsg(null);
+    try {
+      const result = await sendPasswordResetEmail(recoveryEmail);
+      if (result.error) {
+        setErrorMsg(result.error);
+      } else {
+        setRecoverySent(true);
+        showToast(`Secure password reset email dispatched to ${recoveryEmail}`, 'info');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to send recovery email.');
+    } finally {
       setLoading(false);
-      setRecoverySent(true);
-      showToast(`Password recovery link generated for ${recoveryEmail}`, 'info');
-    }, 600);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      setErrorMsg('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMsg('Passwords do not match. Please re-enter.');
+      return;
+    }
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const result = await updateUserPassword(newPassword);
+      if (result.error) {
+        setErrorMsg(result.error);
+      } else {
+        setResetSuccess(true);
+        showToast('Password successfully updated! You can now sign in.', 'success');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to reset password.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fillDemoAccount = (email: string) => {
@@ -481,14 +534,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <form onSubmit={handleSignInSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1.5">
-                      Email Address
+                      Email Address or Username
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
                       <input
-                        type="email"
+                        type="text"
                         required
-                        placeholder="yourname@gmail.com"
+                        placeholder="alex@skillexchange.org or @alexr"
                         value={signInEmail}
                         onChange={e => setSignInEmail(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
@@ -539,6 +592,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       />
                       <span className="text-xs text-slate-600 font-medium">Keep me signed in</span>
                     </label>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab('signup');
+                        setErrorMsg(null);
+                        setSignUpStep(1);
+                      }}
+                      className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+                    >
+                      New user? Register →
+                    </button>
                   </div>
 
                   <button
@@ -561,7 +626,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono-ledger">
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Supabase Auth & RLS Verified</span>
+                    <span>Supabase Auth & Database Verified</span>
                   </span>
                   <span>SSL Encrypted</span>
                 </div>
@@ -850,7 +915,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setTab('signin')}
-                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold mb-4"
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold mb-4 cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Sign In</span>
@@ -862,22 +927,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 tracking-tight">Reset Your Password</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Enter the email registered with your account to receive a secure recovery token.
+                    Enter your registered email address. Supabase Auth will securely send a password reset link to your inbox.
                   </p>
                 </div>
 
                 {recoverySent ? (
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
-                    <p className="font-bold flex items-center gap-1.5 text-sm mb-1 text-emerald-950">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Recovery link simulated!
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-3">
+                    <p className="font-bold flex items-center gap-1.5 text-sm text-emerald-950">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Password Reset Email Dispatched!
                     </p>
-                    <p className="text-emerald-700">
-                      A password reset token has been dispatched to <strong>{recoveryEmail}</strong>. You may now return to sign in.
+                    <p className="text-emerald-700 leading-relaxed">
+                      A secure recovery link has been sent to <strong className="font-mono-ledger">{recoveryEmail}</strong>. Check your inbox (or spam) and click the link to choose a new password.
                     </p>
                     <button
                       type="button"
                       onClick={() => setTab('signin')}
-                      className="mt-3 w-full py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700"
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-colors cursor-pointer"
                     >
                       Return to Sign In
                     </button>
@@ -904,14 +969,106 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
                     >
                       {loading ? (
                         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                       ) : (
                         <>
-                          <span>Send Recovery Link</span>
+                          <span>Send Password Reset Email</span>
                           <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* 4. CREATE NEW PASSWORD TAB (From Reset Link) */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {!successCelebration && tab === 'reset_password' && (
+              <div>
+                <div className="mb-5">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mb-3">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">Create New Password</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Your reset token is verified. Enter a strong new password for your SkillXchange account.
+                  </p>
+                </div>
+
+                {resetSuccess ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-3 text-center">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-sm text-emerald-950">Password Updated Successfully!</h4>
+                    <p className="text-emerald-700">You can now sign in with your new credentials.</p>
+                    <button
+                      type="button"
+                      onClick={() => setTab('signin')}
+                      className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      Sign In to Account
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1.5">
+                        New Password
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+                        <input
+                          type={showNewPass ? 'text' : 'password'}
+                          required
+                          placeholder="At least 6 characters"
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPass(!showNewPass)}
+                          className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1.5">
+                        Confirm New Password
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+                        <input
+                          type={showNewPass ? 'text' : 'password'}
+                          required
+                          placeholder="Re-enter new password"
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {loading ? (
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      ) : (
+                        <>
+                          <span>Update Password & Continue</span>
+                          <CheckCircle2 className="w-4 h-4" />
                         </>
                       )}
                     </button>

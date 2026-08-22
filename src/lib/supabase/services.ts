@@ -382,13 +382,19 @@ export async function mintCredentialBlockInDB(block: CredentialBlock) {
 // ============================================================================
 // 5. SECOND-BRAIN NOTEBOOK SERVICE
 // ============================================================================
-export async function fetchNotebookEntriesFromDB(): Promise<NotebookEntry[] | null> {
+export async function fetchNotebookEntriesFromDB(userId?: string): Promise<NotebookEntry[] | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('notebook_entries')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query;
 
     if (error || !data) return null;
 
@@ -411,12 +417,13 @@ export async function fetchNotebookEntriesFromDB(): Promise<NotebookEntry[] | nu
   }
 }
 
-export async function saveNotebookEntryToDB(entry: NotebookEntry) {
+export async function saveNotebookEntryToDB(entry: NotebookEntry, userId?: string) {
   if (!isSupabaseConfigured || !supabase) return false;
   try {
+    const ownerId = userId || (entry as any).userId || 'guest';
     const { error } = await supabase.from('notebook_entries').insert({
       id: entry.id,
-      user_id: 'user-1',
+      user_id: ownerId,
       title: entry.title,
       date: entry.date,
       teacher_name: entry.teacherName,
@@ -438,10 +445,16 @@ export async function saveNotebookEntryToDB(entry: NotebookEntry) {
 export async function fetchChatMessagesFromDB(currentUserId?: string): Promise<Record<string, PeerChatMessage[]> | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('chat_messages')
       .select('*')
       .order('created_at', { ascending: true });
+
+    if (currentUserId && currentUserId !== 'guest') {
+      query = query.or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+    }
+
+    const { data, error } = await query;
 
     if (error || !data) return null;
 
@@ -476,6 +489,7 @@ export async function saveChatMessageToDB(
   msg: PeerChatMessage
 ) {
   if (!isSupabaseConfigured || !supabase) return false;
+  if (!senderId || !receiverId || senderId === receiverId) return false;
   try {
     const { error } = await supabase.from('chat_messages').insert({
       id: msg.id,
