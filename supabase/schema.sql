@@ -46,15 +46,42 @@ CREATE TABLE public.profiles (
 -- Automated Trigger to sync newly registered Supabase Auth users to public.profiles
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
+DECLARE
+  base_handle TEXT;
+  final_handle TEXT;
+  handle_exists BOOLEAN;
+  counter INT := 0;
 BEGIN
-  INSERT INTO public.profiles (id, email, name, handle, avatar, headline, bio, credit_balance, rating, trust_score, streak_days)
+  -- Extract desired handle or build from email prefix
+  base_handle := COALESCE(NULLIF(TRIM(new.raw_user_meta_data->>'handle'), ''), '@' || split_part(new.email, '@', 1));
+  IF NOT base_handle LIKE '@%' THEN
+    base_handle := '@' || base_handle;
+  END IF;
+
+  final_handle := base_handle;
+
+  -- Ensure handle is guaranteed unique to prevent "Database error saving new user"
+  LOOP
+    SELECT EXISTS (
+      SELECT 1 FROM public.profiles WHERE handle = final_handle AND id <> new.id::text
+    ) INTO handle_exists;
+
+    EXIT WHEN NOT handle_exists;
+
+    counter := counter + 1;
+    final_handle := base_handle || counter::text;
+  END LOOP;
+
+  INSERT INTO public.profiles (
+    id, email, name, handle, avatar, headline, bio, credit_balance, rating, trust_score, streak_days
+  )
   VALUES (
-    new.id,
+    new.id::text,
     new.email,
-    COALESCE(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
-    COALESCE(new.raw_user_meta_data->>'handle', '@' || split_part(new.email, '@', 1)),
-    COALESCE(new.raw_user_meta_data->>'avatar', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'),
-    COALESCE(new.raw_user_meta_data->>'headline', 'Skill Exchange Member'),
+    COALESCE(NULLIF(TRIM(new.raw_user_meta_data->>'name'), ''), split_part(new.email, '@', 1)),
+    final_handle,
+    COALESCE(NULLIF(TRIM(new.raw_user_meta_data->>'avatar'), ''), 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'),
+    COALESCE(NULLIF(TRIM(new.raw_user_meta_data->>'headline'), ''), 'Skill Exchange Member'),
     'Excited to barter skills on SkillXchange!',
     5.00,
     5.00,
@@ -63,10 +90,16 @@ BEGIN
   )
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
-    name = COALESCE(EXCLUDED.name, public.profiles.name);
+    name = COALESCE(EXCLUDED.name, public.profiles.name),
+    handle = COALESCE(public.profiles.handle, EXCLUDED.handle);
+
   RETURN new;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Best effort: Never abort the Auth user creation transaction
+    RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created

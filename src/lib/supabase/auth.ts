@@ -335,6 +335,14 @@ export async function signUpUser(data: SignUpData): Promise<{
         return { user: fallbackUser, needsEmailVerification: false, error: null };
       }
 
+      if (errMsg.includes('database error saving new user')) {
+        return {
+          user: null,
+          needsEmailVerification: false,
+          error: 'Username/Handle already taken or database trigger busy. Please choose a different username handle or run the latest supabase/schema.sql in Supabase.',
+        };
+      }
+
       return { user: null, needsEmailVerification: false, error: authError.message };
     }
 
