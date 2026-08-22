@@ -278,6 +278,8 @@ export const SessionScreen: React.FC = () => {
   const [audioLevel, setAudioLevel] = useState<number>(35);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const targetPeerIdRef = useRef<string | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const realtimeChannelRef = useRef<any>(null);
   const localClientId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`);
 
@@ -426,6 +428,15 @@ export const SessionScreen: React.FC = () => {
     }
   }, [mediaStream, isCameraActive, sessionView, viewMode]);
 
+  // Copy link helper
+  const copyMeetLink = () => {
+    if (typeof window !== 'undefined') {
+      const url = `${window.location.origin}/?room=${activeMeeting.roomCode}`;
+      navigator.clipboard?.writeText(url);
+      showToast(`Meeting invite link copied: ${url}`, 'success');
+    }
+  };
+
   // Keep remoteVideoRef and hostVideoRef attached to remoteStream
   useEffect(() => {
     if (remoteStream) {
@@ -440,6 +451,27 @@ export const SessionScreen: React.FC = () => {
     }
   }, [remoteStream, sessionView, viewMode, isScreenSharing]);
 
+  // Synchronize local media tracks to existing PeerConnection dynamically without closing connection
+  useEffect(() => {
+    mediaStreamRef.current = mediaStream;
+    const pc = peerConnectionRef.current;
+    if (pc && pc.signalingState !== 'closed' && mediaStream) {
+      const senders = pc.getSenders();
+      mediaStream.getTracks().forEach(track => {
+        const existingSender = senders.find(s => s.track && s.track.kind === track.kind);
+        if (existingSender) {
+          existingSender.replaceTrack(track).catch(err => console.error('Error replacing track:', err));
+        } else {
+          try {
+            pc.addTrack(track, mediaStream);
+          } catch (err) {
+            console.error('Error adding track:', err);
+          }
+        }
+      });
+    }
+  }, [mediaStream]);
+
   // ── WEBRTC P2P MULTI-DEVICE SIGNALING VIA SUPABASE REALTIME ──
   useEffect(() => {
     if (sessionView !== 'live_meeting' || !supabase) return;
@@ -451,6 +483,14 @@ export const SessionScreen: React.FC = () => {
     realtimeChannelRef.current = channel;
 
     const initPeerConnection = (targetClientId: string) => {
+      if (
+        peerConnectionRef.current &&
+        peerConnectionRef.current.signalingState !== 'closed' &&
+        targetPeerIdRef.current === targetClientId
+      ) {
+        return peerConnectionRef.current;
+      }
+
       if (peerConnectionRef.current) {
         try {
           peerConnectionRef.current.close();
@@ -458,14 +498,15 @@ export const SessionScreen: React.FC = () => {
         peerConnectionRef.current = null;
       }
 
+      targetPeerIdRef.current = targetClientId;
       const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionRef.current = pc;
 
       // Add local media tracks if active
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => {
           try {
-            pc.addTrack(track, mediaStream);
+            pc.addTrack(track, mediaStreamRef.current!);
           } catch {}
         });
       }
@@ -501,6 +542,29 @@ export const SessionScreen: React.FC = () => {
         }
       };
 
+      pc.onnegotiationneeded = async () => {
+        if (localClientId.current > targetClientId) {
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            channel.send({
+              type: 'broadcast',
+              event: 'webrtc_signal',
+              payload: {
+                type: 'sdp_offer',
+                from: localClientId.current,
+                to: targetClientId,
+                sdp: offer,
+                senderName: currentUser.name,
+                senderAvatar: currentUser.avatar,
+              },
+            });
+          } catch (err) {
+            console.error('Renegotiation error:', err);
+          }
+        }
+      };
+
       return pc;
     };
 
@@ -511,6 +575,15 @@ export const SessionScreen: React.FC = () => {
         name: peerPayload.name || 'Remote Peer',
         avatar: peerPayload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
       });
+
+      // If an active RTCPeerConnection already exists for this peer, do NOT tear down or restart
+      if (
+        peerConnectionRef.current &&
+        peerConnectionRef.current.signalingState !== 'closed' &&
+        targetPeerIdRef.current === peerPayload.from
+      ) {
+        return;
+      }
 
       // Deterministic initiator: the client with larger ID creates the offer
       const shouldInitiate = localClientId.current > peerPayload.from;
@@ -577,7 +650,7 @@ export const SessionScreen: React.FC = () => {
           }
         } else if (payload.type === 'sdp_answer') {
           const pc = peerConnectionRef.current;
-          if (pc) {
+          if (pc && (pc.signalingState === 'have-local-offer' || pc.signalingState === 'have-remote-offer')) {
             try {
               await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
             } catch (err) {
@@ -663,7 +736,7 @@ export const SessionScreen: React.FC = () => {
         peerConnectionRef.current = null;
       }
     };
-  }, [sessionView, activeMeeting.roomCode, mediaStream]);
+  }, [sessionView, activeMeeting.roomCode]);
 
   // Live Canvas Video Frame Broadcaster (Bulletproof Fallback across any NAT/Firewall)
   useEffect(() => {
@@ -715,15 +788,6 @@ export const SessionScreen: React.FC = () => {
     setSessionView('live_meeting');
     startLiveSession(topic, currentUser.name, 'Live Attendees', newRoomSkill);
     showToast(`Live Study Room [${generatedRoomCode}] broadcast is now ACTIVE!`, 'success');
-  };
-
-  const copyMeetLink = () => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://skillxchange.vercel.app';
-    const link = `${origin}/?room=${activeMeeting.roomCode}`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(link);
-    }
-    showToast(`Meeting link copied: ${link}`, 'success');
   };
 
   // Toggle Camera
@@ -1364,14 +1428,15 @@ export const SessionScreen: React.FC = () => {
                   <input
                     type="text"
                     readOnly
-                    value={`https://meet.skillexchange.org/room/${generatedRoomCode}`}
+                    value={typeof window !== 'undefined' ? `${window.location.origin}/?room=${generatedRoomCode}` : `/?room=${generatedRoomCode}`}
                     className="flex-1 px-3 py-2 rounded-lg bg-white border border-amber-200 text-xs font-mono-ledger text-slate-700 select-all"
                   />
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard?.writeText(`https://meet.skillexchange.org/room/${generatedRoomCode}`);
-                      showToast('Invite link copied!', 'success');
+                      const url = typeof window !== 'undefined' ? `${window.location.origin}/?room=${generatedRoomCode}` : `/?room=${generatedRoomCode}`;
+                      navigator.clipboard?.writeText(url);
+                      showToast(`Invite link copied: ${url}`, 'success');
                     }}
                     className="p-2 rounded-lg bg-white hover:bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold transition-colors cursor-pointer"
                     title="Copy Link"

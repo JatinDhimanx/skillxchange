@@ -167,18 +167,18 @@ export const ProfileScreen: React.FC = () => {
             {currentUser.skillsToTeach.map(s => (
               <div
                 key={s.skillId}
-                className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs"
+                className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs overflow-hidden"
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-sm">{s.skillName}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono-ledger font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="font-bold text-slate-900 text-sm truncate min-w-0" title={s.skillName}>{s.skillName}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-mono-ledger font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
                       {s.level}
                     </span>
                     {currentUser.skillsToTeach.length > 1 && (
                       <button
                         onClick={() => removeSkillToTeach(s.skillId)}
-                        className="text-slate-400 hover:text-rose-600"
+                        className="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer shrink-0"
                         title="Remove skill"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -203,7 +203,7 @@ export const ProfileScreen: React.FC = () => {
             </h2>
             <button
               onClick={() => setShowAddLearnModal(true)}
-              className="px-3 py-1 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 shadow-xs hover:bg-emerald-700 transition-all"
+              className="px-3 py-1 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 shadow-xs hover:bg-emerald-700 transition-all cursor-pointer"
             >
               <Plus className="w-3 h-3" /> Add goal
             </button>
@@ -213,18 +213,18 @@ export const ProfileScreen: React.FC = () => {
             {currentUser.skillsToLearn.map(l => (
               <div
                 key={l.skillId}
-                className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs"
+                className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs overflow-hidden"
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-sm">{l.skillName}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono-ledger font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="font-bold text-slate-900 text-sm truncate min-w-0" title={l.skillName}>{l.skillName}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-mono-ledger font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
                       Target: {l.targetLevel}
                     </span>
                     {currentUser.skillsToLearn.length > 1 && (
                       <button
                         onClick={() => removeSkillToLearn(l.skillId)}
-                        className="text-slate-400 hover:text-rose-600"
+                        className="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer shrink-0"
                         title="Remove goal"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -251,18 +251,18 @@ export const ProfileScreen: React.FC = () => {
       </div>
 
       {/* Cryptographic Credential Ledger Blocks */}
-      <div className="paper-card p-6 sm:p-8 space-y-4 shadow-sm bg-white border border-slate-200">
+      <div className="paper-card p-6 sm:p-8 space-y-4 shadow-sm bg-white border border-slate-200 overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h2 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
-              <Lock className="w-4 h-4 text-emerald-600" />
+              <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
               Cryptographic Credential Ledger Blocks (SHA-256 Verifiable)
             </h2>
             <p className="text-xs text-slate-500 font-sans">
               Immutable certificate blocks signed upon micro-quiz completion. Click any block to view cryptographic proof.
             </p>
           </div>
-          <span className="text-xs font-mono-ledger font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+          <span className="text-xs font-mono-ledger font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 shrink-0 hidden sm:inline-block">
             TAMPER-EVIDENT CHAIN
           </span>
         </div>
@@ -272,11 +272,13 @@ export const ProfileScreen: React.FC = () => {
             <div
               key={block.blockIndex}
               onClick={() => setSelectedCertBlock(block)}
-              className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 cursor-pointer hover:border-emerald-500 transition-all shadow-xs"
+              className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 cursor-pointer hover:border-emerald-500 transition-all shadow-xs overflow-hidden"
             >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900">Block #{block.blockIndex} • {block.skillName}</span>
-                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded">
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <span className="font-bold text-slate-900 truncate min-w-0" title={`Block #${block.blockIndex} • ${block.skillName}`}>
+                  Block #{block.blockIndex} • {block.skillName}
+                </span>
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded shrink-0">
                   {block.quizScorePct}% Mastery
                 </span>
               </div>
