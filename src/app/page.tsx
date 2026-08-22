@@ -256,10 +256,16 @@ const MainAppContent: React.FC = () => {
 
       {/* Global AI Skill Discovery FAB */}
       <button
-        onClick={() => setIsGlobalDiscoveryOpen(true)}
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[60] flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-full shadow-lg hover:shadow-orange-500/40 hover:-translate-y-1 transition-all group"
+        onClick={() => setIsGlobalDiscoveryOpen(!isGlobalDiscoveryOpen)}
+        aria-label="Open SkillXchange AI Assistant"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[60] flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white rounded-2xl shadow-xl shadow-emerald-900/20 hover:shadow-emerald-500/30 hover:-translate-y-0.5 active:translate-y-0 transition-all group cursor-pointer border border-emerald-400/40"
       >
-        <Sparkles className="w-6 h-6 text-white group-hover:rotate-12 transition-transform" />
+        <div className="relative flex items-center justify-center">
+          <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white group-hover:scale-110 transition-transform" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-white rounded-full flex items-center justify-center">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+          </span>
+        </div>
       </button>
 
       {/* Global AI Skill Discovery Modal */}

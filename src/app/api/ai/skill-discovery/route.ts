@@ -85,7 +85,7 @@ function sanitizeChat13Response(
   extractedContext: DiscoveryContext
 ): { story: string; options: [string, string, string] } {
   let story = (rawStory || 'Welcome to SkillXchange AI! What would you like to explore today?').trim();
-  
+
   let cleanOptions: string[] = [];
   if (Array.isArray(rawOptions)) {
     cleanOptions = rawOptions

@@ -344,284 +344,269 @@ export const AISkillDiscoveryModal: React.FC<AISkillDiscoveryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed z-[70] flex flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-bottom-10 fade-in duration-300 origin-bottom-right 
-      bottom-0 left-0 right-0 w-full h-[85vh] rounded-t-3xl border-t-2 border-amber-500/30 
-      sm:bottom-24 sm:right-6 sm:left-auto sm:w-[450px] sm:h-[600px] sm:max-h-[calc(100vh-8rem)] sm:rounded-3xl sm:border-2 sm:border-amber-500/20">
-      {/* Top Header */}
-        <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-amber-950 text-white flex items-center justify-between border-b border-slate-700/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shadow-sm">
-              <Bot className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
-                  <span>SkillXchange AI</span>
-                </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono-ledger bg-amber-400/20 text-amber-300 border border-amber-400/30 font-bold">
-                  🕷️ AI Skill Discovery
-                </span>
-              </div>
-              <p className="text-xs text-slate-300">
-                Interactive Multi-Choice AI Storyteller (CHAT-13)
-              </p>
-            </div>
+    <div className="fixed z-[70] flex flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-bottom-6 fade-in duration-300 origin-bottom-right
+      bottom-0 left-0 right-0 w-full h-[85vh] rounded-t-3xl border-t border-slate-200/80
+      sm:bottom-22 sm:right-6 sm:left-auto sm:w-[440px] sm:h-[580px] sm:max-h-[calc(100vh-7rem)] sm:rounded-2xl sm:border sm:border-slate-200/90 sm:shadow-2xl">
+      {/* Top Header matching HeaderNav slate-900 / emerald styling */}
+      <div className="px-4 sm:px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="relative w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-xs">
+            <Bot className="w-5 h-5" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-slate-900 animate-pulse" />
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={startNewDiscovery}
-              title="Restart Discovery"
-              className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span className="hidden sm:inline">Restart</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
+                SkillXchange AI
+              </h2>
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-mono-ledger bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold tracking-wide uppercase">
+                Discovery
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium">
+              Interactive Barter Matchmaker
+            </p>
           </div>
         </div>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50/50">
-          {/* Conversation History Stream */}
-          <div className="space-y-4">
-            {messages.map((msg, idx) => (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={startNewDiscovery}
+            title="Restart Discovery"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline text-[11px]">Restart</span>
+          </button>
+          <button
+            onClick={onClose}
+            aria-label="Close AI Assistant"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Modal Body */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-slate-50/60">
+        {/* Conversation History Stream */}
+        <div className="space-y-3.5">
+          {messages.map((msg, idx) => (
+            <div
+              key={msg.id || idx}
+              className={`flex gap-2.5 ${
+                msg.sender === 'user' ? 'justify-end' : 'justify-start'
+              }`}
+            >
+              {msg.sender === 'ai' && (
+                <div className="w-7 h-7 rounded-lg bg-emerald-100/80 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 mt-0.5 shadow-xs">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+              )}
+
               <div
-                key={msg.id || idx}
-                className={`flex gap-3 ${
-                  msg.sender === 'user' ? 'justify-end' : 'justify-start'
+                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs text-xs sm:text-[13px] leading-relaxed ${
+                  msg.sender === 'user'
+                    ? 'bg-slate-900 text-white rounded-tr-xs font-medium'
+                    : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs'
                 }`}
               >
-                {msg.sender === 'ai' && (
-                  <div className="w-8 h-8 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 mt-0.5">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                )}
-
-                <div
-                  className={`max-w-[85%] sm:max-w-[78%] rounded-2xl px-4 py-3.5 shadow-sm text-xs sm:text-sm leading-relaxed ${
-                    msg.sender === 'user'
-                      ? 'bg-slate-900 text-white rounded-tr-none font-medium'
-                      : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-none'
-                  }`}
-                >
-                  <p>{msg.text}</p>
-                </div>
-
-                {msg.sender === 'user' && (
-                  <div className="w-8 h-8 rounded-lg bg-slate-800 text-white flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
-                    {currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* AI Thinking Animation */}
-            {loading && (
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
-                  <Sparkles className="w-4 h-4 animate-spin text-amber-600" />
-                </div>
-                <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm flex items-center gap-2 text-xs text-slate-600 font-mono-ledger">
-                  <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                  <span>🤖 SkillXchange AI is thinking...</span>
-                </div>
-              </div>
-            )}
-
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* 3 Clickable Option Cards (CHAT-13 Standard) */}
-          {!showMatchResults && currentOptions && currentOptions.length === 3 && (
-            <div className="pt-2 border-t border-slate-200">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-bold font-mono-ledger text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Select an option (3 Choices)</span>
-                </span>
-                <span className="text-[11px] text-amber-600 font-semibold font-mono-ledger">
-                  CHAT-13 AI Storyteller
-                </span>
+                <p>{msg.text}</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {currentOptions.map((opt, i) => (
-                  <button
-                    key={i}
-                    disabled={loading}
-                    onClick={() => handleSelectOption(opt)}
-                    className="p-3.5 rounded-xl text-left bg-white hover:bg-amber-50/50 border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all group active:scale-98 disabled:opacity-50 cursor-pointer flex flex-col justify-between min-h-[90px]"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-amber-900 transition-colors line-clamp-2">
-                        {opt}
-                      </span>
-                      <span className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-amber-100 text-slate-500 group-hover:text-amber-700 flex items-center justify-center shrink-0 transition-colors">
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-500 font-mono-ledger mt-2">
-                      Option {i + 1}
-                    </span>
-                  </button>
-                ))}
+              {msg.sender === 'user' && (
+                <div className="w-7 h-7 rounded-lg bg-slate-800 text-white flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold shadow-xs">
+                  {currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* AI Thinking Animation */}
+          {loading && (
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100/80 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 shadow-xs">
+                <Sparkles className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+              </div>
+              <div className="bg-white border border-slate-200/80 rounded-2xl rounded-tl-xs px-3.5 py-2.5 shadow-xs flex items-center gap-2 text-xs text-slate-600 font-mono-ledger">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <span>AI is matching skills...</span>
               </div>
             </div>
           )}
 
-          {/* Real SkillXchange Matches Connection */}
-          {showMatchResults && (
-            <div className="space-y-4 pt-3 border-t border-slate-200 animate-in fade-in duration-300">
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-amber-50 border border-emerald-200 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
-                    <Handshake className="w-5 h-5 text-emerald-600" />
-                    <span>🎯 Real SkillXchange Matches Discovered!</span>
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* 3 Clickable Option Cards (CHAT-13 Native UI) */}
+        {!showMatchResults && currentOptions && currentOptions.length === 3 && (
+          <div className="pt-2 border-t border-slate-200/70 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold font-mono-ledger text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-emerald-600" />
+                <span>Choose Your Path</span>
+              </span>
+              <span className="text-[10px] text-emerald-600 font-semibold font-mono-ledger">
+                3 Options
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {currentOptions.map((opt, i) => (
+                <button
+                  key={i}
+                  disabled={loading}
+                  onClick={() => handleSelectOption(opt)}
+                  className="w-full p-3 rounded-xl text-left bg-white hover:bg-emerald-50/70 border border-slate-200/90 hover:border-emerald-500/50 shadow-xs hover:shadow-sm transition-all group active:scale-[0.99] disabled:opacity-50 cursor-pointer flex items-center justify-between gap-2.5"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-5 h-5 rounded-md bg-slate-100 group-hover:bg-emerald-100 text-slate-600 group-hover:text-emerald-700 text-[10px] font-bold font-mono-ledger flex items-center justify-center shrink-0 transition-colors">
+                      {['A', 'B', 'C'][i]}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-800 group-hover:text-emerald-950 transition-colors truncate">
+                      {opt}
+                    </span>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white font-mono-ledger">
-                    {matchedPeers.length} Peers Available
-                  </span>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Real SkillXchange Matches Connection */}
+        {showMatchResults && (
+          <div className="space-y-3 pt-2 border-t border-slate-200/80 animate-in fade-in duration-300">
+            <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200/70 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
+                  <Handshake className="w-4 h-4 text-emerald-600" />
+                  <span>Real Peer Matches Found!</span>
                 </div>
-                <p className="text-xs text-slate-600 mt-1">
-                  We found real registered users who match your discovered teaching & learning preferences.
-                </p>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white font-mono-ledger">
+                  {matchedPeers.length} Available
+                </span>
               </div>
+              <p className="text-[11px] text-slate-600 mt-1 leading-normal">
+                Matches based on your discovered teaching and learning skills.
+              </p>
+            </div>
 
-              {/* Match Cards List */}
-              <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
-                {matchedPeers.length > 0 ? (
-                  matchedPeers.map(candidate => (
-                    <div
-                      key={candidate.user.id}
-                      className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        {/* Peer Info */}
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={candidate.user.avatar}
-                            alt={candidate.user.name}
-                            className="w-12 h-12 rounded-xl object-cover border border-slate-200"
-                          />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-bold text-slate-900">{candidate.user.name}</h4>
-                              <span className="text-xs text-slate-500 font-mono-ledger">{candidate.user.handle}</span>
-                            </div>
-                            <p className="text-xs text-slate-600 line-clamp-1 mt-0.5">{candidate.user.headline}</p>
-                            <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono-ledger mt-1">
-                              <span className="flex items-center gap-0.5 text-amber-600 font-bold">
-                                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                                {candidate.user.trustScore?.averageRating || 5.0}
-                              </span>
-                              <span>•</span>
-                              <span className="text-emerald-700 font-semibold">
-                                Trust {candidate.user.trustScore?.overallScore || 90}/100
-                              </span>
-                            </div>
+            {/* Match Cards List */}
+            <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-0.5">
+              {matchedPeers.length > 0 ? (
+                matchedPeers.map(candidate => (
+                  <div
+                    key={candidate.user.id}
+                    className="p-3 rounded-xl bg-white border border-slate-200/90 hover:border-emerald-400/80 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-center justify-between gap-2.5">
+                      {/* Peer Info */}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={candidate.user.avatar}
+                          alt={candidate.user.name}
+                          className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-bold text-slate-900 truncate">{candidate.user.name}</h4>
+                            <span className="text-[10px] text-slate-400 font-mono-ledger shrink-0">{candidate.user.handle}</span>
                           </div>
-                        </div>
-
-                        {/* Match Badge & Action */}
-                        <div className="flex items-center gap-3 self-end sm:self-center">
-                          <div className="text-right">
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              {candidate.matchScore}% Match
-                            </span>
-                            <p className="text-[10px] text-slate-500 mt-1 font-mono-ledger">
-                              {candidate.quality === 'perfect' ? '🤝 Bilateral Barter' : '⚡ 1-Way / Credits'}
-                            </p>
+                          <p className="text-[11px] text-slate-500 truncate">{candidate.user.headline || 'SkillXchange Member'}</p>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-500 font-mono-ledger mt-0.5">
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                            <span className="font-semibold text-slate-700">{candidate.user.trustScore?.averageRating || 5.0}</span>
+                            <span>•</span>
+                            <span className="text-emerald-700 font-semibold">{candidate.matchScore}% Match</span>
                           </div>
-
-                          <button
-                            onClick={() => handleRequestExchange(candidate)}
-                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
-                          >
-                            <Handshake className="w-3.5 h-3.5" />
-                            <span>Request Swap</span>
-                          </button>
                         </div>
                       </div>
 
-                      {/* Barter Reasoning */}
-                      {candidate.reasons && candidate.reasons.length > 0 && (
-                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                          <span className="font-bold text-slate-700 font-mono-ledger">Why this matches:</span>
-                          <span>{candidate.reasons[0]}</span>
-                        </div>
-                      )}
+                      {/* Match Action */}
+                      <button
+                        onClick={() => handleRequestExchange(candidate)}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
+                      >
+                        <Handshake className="w-3 h-3" />
+                        <span>Swap</span>
+                      </button>
                     </div>
-                  ))
-                ) : (
-                  <div className="p-6 text-center bg-white rounded-2xl border border-dashed border-slate-300">
-                    <p className="text-xs text-slate-600">
-                      No direct registered peer offers this exact pair yet. You can post a <strong>Reverse Skill Bounty</strong> or explore our open skill directory!
-                    </p>
-                    <button
-                      onClick={() => {
-                        onClose();
-                        setActiveTab('bounties');
-                      }}
-                      className="mt-3 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
-                    >
-                      Post Learning Bounty →
-                    </button>
+
+                    {/* Barter Reasoning */}
+                    {candidate.reasons && candidate.reasons.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-500">
+                        <span className="font-semibold text-slate-700">Reason: </span>
+                        <span>{candidate.reasons[0]}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-
-              {/* Full Matches Screen Link */}
-              <div className="flex items-center justify-between pt-2">
-                <button
-                  onClick={() => {
-                    setShowMatchResults(false);
-                    startNewDiscovery();
-                  }}
-                  className="text-xs text-slate-600 hover:text-slate-900 font-semibold underline flex items-center gap-1 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Start New Discovery</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onClose();
-                    setActiveTab('matches');
-                    if (onNavigateToMatches) onNavigateToMatches();
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-sm"
-                >
-                  <span>Explore Full Matches Screen</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
+                ))
+              ) : (
+                <div className="p-4 text-center bg-white rounded-xl border border-dashed border-slate-200">
+                  <p className="text-xs text-slate-500">
+                    No direct swap found yet for this exact combo.
+                  </p>
+                  <button
+                    onClick={() => {
+                      onClose();
+                      setActiveTab('bounties');
+                    }}
+                    className="mt-2.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold"
+                  >
+                    Post Learning Bounty →
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Footer / Manual Navigation */}
-        <div className="px-5 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-mono-ledger">
-          <button
-            onClick={() => {
-              onClose();
-              setActiveTab('matches');
-            }}
-            className="text-slate-600 hover:text-slate-900 hover:underline font-medium cursor-pointer"
-          >
-            ← Browse Skills Manually
-          </button>
+            {/* Navigation Actions */}
+            <div className="flex items-center justify-between pt-1">
+              <button
+                onClick={() => {
+                  setShowMatchResults(false);
+                  startNewDiscovery();
+                }}
+                className="text-[11px] text-slate-500 hover:text-slate-900 font-semibold underline flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Restart</span>
+              </button>
 
-          <span className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>AI Guided • Real Supabase Matches</span>
-          </span>
-        </div>
+              <button
+                onClick={() => {
+                  onClose();
+                  setActiveTab('matches');
+                  if (onNavigateToMatches) onNavigateToMatches();
+                }}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <span>Full Matches</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer / Manual Navigation */}
+      <div className="px-4 py-2.5 bg-slate-100/90 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 font-mono-ledger shrink-0">
+        <button
+          onClick={() => {
+            onClose();
+            setActiveTab('matches');
+          }}
+          className="text-slate-600 hover:text-emerald-700 hover:underline font-semibold cursor-pointer"
+        >
+          ← Browse Directory
+        </button>
+
+        <span className="flex items-center gap-1">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+          <span>SkillXchange Engine</span>
+        </span>
+      </div>
     </div>
   );
 };
