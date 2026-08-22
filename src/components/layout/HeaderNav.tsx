@@ -489,17 +489,36 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
               </div>
 
               {/* Bottom actions */}
-              <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono-ledger font-bold">
-                  <Coins className="w-3.5 h-3.5 shrink-0" />
-                  {currentUser.creditsBalance.toFixed(1)} CR
-                </div>
-                <button
-                  onClick={() => { setShowAddSkillModal(true); setMobileMenuOpen(false); }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-bold transition-all active:scale-95"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Skill
-                </button>
+              <div className="pt-3 border-t border-slate-100">
+                {isAuthenticated ? (
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono-ledger font-bold">
+                      <Coins className="w-3.5 h-3.5 shrink-0" />
+                      {currentUser.creditsBalance.toFixed(1)} CR
+                    </div>
+                    <button
+                      onClick={() => { setShowAddSkillModal(true); setMobileMenuOpen(false); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Skill
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { openAuthModal('signin'); setMobileMenuOpen(false); }}
+                      className="flex-1 py-2.5 rounded-full border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-bold text-center transition-colors cursor-pointer"
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      onClick={() => { openAuthModal('signup'); setMobileMenuOpen(false); }}
+                      className="flex-1 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold text-center shadow-xs transition-colors cursor-pointer"
+                    >
+                      Get Started
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

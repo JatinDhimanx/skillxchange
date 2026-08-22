@@ -340,8 +340,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } catch {}
         }
         setIsAuthenticated(false);
-        setAuthModalOpen(true);
-        setAuthModalTab('signin');
+        setAuthModalOpen(false);
       }
       setIsAuthLoading(false);
     });

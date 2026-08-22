@@ -156,7 +156,7 @@ const FEATURE_HIGHLIGHTS = [
 /* COMPONENT                                                   */
 /* ──────────────────────────────────────────────────────────── */
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
-  const { allUsers, currentUser, openChatWithPeer } = useApp();
+  const { allUsers, currentUser, openChatWithPeer, isAuthenticated, openAuthModal } = useApp();
 
   // Animated counters
   const [stats, setStats] = useState({ exchanges: 0, credits: 0, chains: 0, escrowRate: 0 });
@@ -334,18 +334,43 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
         {/* CTA buttons */}
         <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-          <button
-            onClick={() => onNavigate('matches')}
-            className="px-7 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap"
-          >
-            Find My First Match <ArrowRight className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onNavigate('chains')}
-            className="px-7 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap"
-          >
-            Explore 3-Way Chains <Repeat className="w-4 h-4" />
-          </button>
+          {isAuthenticated && currentUser.id !== 'guest' ? (
+            <>
+              <button
+                onClick={() => onNavigate('matches')}
+                className="px-7 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                Find My Matches <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => onNavigate('chains')}
+                className="px-7 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                Explore 3-Way Chains <Repeat className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => openAuthModal('signup')}
+                className="px-7 py-3 rounded-full bg-slate-900 hover:bg-emerald-600 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                <span>Get Started (Free 5.0 Credits)</span> <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => openAuthModal('signin')}
+                className="px-6 py-3 rounded-full bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-sm shadow-xs transition-all active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => onNavigate('chains')}
+                className="px-6 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                Explore Chains <Repeat className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       </section>
 
@@ -688,63 +713,65 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* ── 9. MY PROGRESS SNAPSHOT ──────────────────────────── */}
-      <section className="max-w-[1180px] mx-auto px-4">
-        <div className="paper-card p-6 sm:p-8 bg-white">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                className="w-16 h-16 rounded-full object-cover border-2 border-slate-200"
-              />
-              <div className="space-y-1">
-                <h3 className="font-display font-bold text-lg text-slate-900">Welcome back, {currentUser.name.split(' ')[0]}!</h3>
-                <p className="text-xs text-slate-500">{currentUser.headline}</p>
-                <div className="flex items-center gap-3 text-xs font-mono-ledger">
-                  <span className="flex items-center gap-1 text-orange-600 font-bold">
-                    <Flame className="w-3.5 h-3.5" /> {currentUser.streakDays}-day streak
-                  </span>
-                  <span className="text-slate-300">|</span>
-                  <span className="text-amber-700 font-bold">{currentUser.xpPoints} XP</span>
-                  <span className="text-slate-300">|</span>
-                  <span className="text-emerald-700 font-bold">{currentUser.creditsBalance.toFixed(1)} CR</span>
+      {/* ── 9. MY PROGRESS SNAPSHOT (Only when authenticated) ──────────────── */}
+      {isAuthenticated && currentUser.id !== 'guest' && (
+        <section className="max-w-[1180px] mx-auto px-4">
+          <div className="paper-card p-6 sm:p-8 bg-white">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-5">
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-slate-200"
+                />
+                <div className="space-y-1">
+                  <h3 className="font-display font-bold text-lg text-slate-900">Welcome back, {currentUser.name.split(' ')[0]}!</h3>
+                  <p className="text-xs text-slate-500">{currentUser.headline}</p>
+                  <div className="flex items-center gap-3 text-xs font-mono-ledger">
+                    <span className="flex items-center gap-1 text-orange-600 font-bold">
+                      <Flame className="w-3.5 h-3.5" /> {currentUser.streakDays}-day streak
+                    </span>
+                    <span className="text-slate-300">|</span>
+                    <span className="text-amber-700 font-bold">{currentUser.xpPoints} XP</span>
+                    <span className="text-slate-300">|</span>
+                    <span className="text-emerald-700 font-bold">{currentUser.creditsBalance.toFixed(1)} CR</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => onNavigate('profile')}
-                className="px-5 py-2.5 rounded-full border border-slate-300 text-slate-700 hover:border-slate-900 text-xs font-bold transition-all whitespace-nowrap"
-              >
-                Edit Profile
-              </button>
-              <button
-                onClick={() => onNavigate('progress' as ScreenTab)}
-                className="px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap active:scale-95"
-              >
-                <BarChart2 className="w-3.5 h-3.5" /> My Dashboard
-              </button>
-            </div>
-          </div>
-
-          {/* Mini stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
-            {[
-              { label: 'Skills Teaching', value: currentUser.skillsToTeach.length, iconEl: <GraduationCap className="w-5 h-5 text-amber-600" />, bg: 'bg-amber-50 border-amber-200', color: 'text-amber-700' },
-              { label: 'Skills Learning', value: currentUser.skillsToLearn.length, iconEl: <BookOpen className="w-5 h-5 text-emerald-600" />, bg: 'bg-emerald-50 border-emerald-200', color: 'text-emerald-700' },
-              { label: 'Teaching Hours', value: `${currentUser.teachingHours}h`, iconEl: <Clock className="w-5 h-5 text-blue-600" />, bg: 'bg-blue-50 border-blue-200', color: 'text-blue-700' },
-              { label: 'Credits Balance', value: `${currentUser.creditsBalance.toFixed(1)} CR`, iconEl: <Coins className="w-5 h-5 text-purple-600" />, bg: 'bg-purple-50 border-purple-200', color: 'text-purple-700' },
-            ].map(s => (
-              <div key={s.label} className="text-center space-y-2">
-                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center mx-auto ${s.bg}`}>{s.iconEl}</div>
-                <p className={`font-display font-black text-xl ${s.color}`}>{s.value}</p>
-                <p className="text-[10px] font-mono-ledger text-slate-400 uppercase">{s.label}</p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => onNavigate('profile')}
+                  className="px-5 py-2.5 rounded-full border border-slate-300 text-slate-700 hover:border-slate-900 text-xs font-bold transition-all whitespace-nowrap"
+                >
+                  Edit Profile
+                </button>
+                <button
+                  onClick={() => onNavigate('progress' as ScreenTab)}
+                  className="px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap active:scale-95"
+                >
+                  <BarChart2 className="w-3.5 h-3.5" /> My Dashboard
+                </button>
               </div>
-            ))}
+            </div>
+
+            {/* Mini stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+              {[
+                { label: 'Skills Teaching', value: currentUser.skillsToTeach.length, iconEl: <GraduationCap className="w-5 h-5 text-amber-600" />, bg: 'bg-amber-50 border-amber-200', color: 'text-amber-700' },
+                { label: 'Skills Learning', value: currentUser.skillsToLearn.length, iconEl: <BookOpen className="w-5 h-5 text-emerald-600" />, bg: 'bg-emerald-50 border-emerald-200', color: 'text-emerald-700' },
+                { label: 'Teaching Hours', value: `${currentUser.teachingHours}h`, iconEl: <Clock className="w-5 h-5 text-blue-600" />, bg: 'bg-blue-50 border-blue-200', color: 'text-blue-700' },
+                { label: 'Credits Balance', value: `${currentUser.creditsBalance.toFixed(1)} CR`, iconEl: <Coins className="w-5 h-5 text-purple-600" />, bg: 'bg-purple-50 border-purple-200', color: 'text-purple-700' },
+              ].map(s => (
+                <div key={s.label} className="text-center space-y-2">
+                  <div className={`w-10 h-10 rounded-xl border flex items-center justify-center mx-auto ${s.bg}`}>{s.iconEl}</div>
+                  <p className={`font-display font-black text-xl ${s.color}`}>{s.value}</p>
+                  <p className="text-[10px] font-mono-ledger text-slate-400 uppercase">{s.label}</p>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── 10. FINAL CTA ────────────────────────────────────── */}
       <section className="max-w-[1180px] mx-auto px-4">
