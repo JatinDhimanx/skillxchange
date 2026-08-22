@@ -24,6 +24,7 @@ export const PeerChatDrawer: React.FC<PeerChatDrawerProps> = ({ onNavigate }) =>
     sendPeerMessage,
     clearPeerChat,
     startLiveSession,
+    invitePeerToStudyRoom,
     sendExchangeProposal,
     acceptExchangeProposal,
     showToast,
@@ -81,13 +82,11 @@ export const PeerChatDrawer: React.FC<PeerChatDrawerProps> = ({ onNavigate }) =>
   };
 
   const handleStartStudyRoom = () => {
-    startLiveSession(
-      `1-on-1 Exchange: ${currentUser.skillsToTeach[0]?.skillName || 'Skill'} ⇄ ${activeChatPeer.skill}`,
-      currentUser.name,
-      activeChatPeer.name,
-      activeChatPeer.skill
+    invitePeerToStudyRoom(
+      activePeerId,
+      activeChatPeer.skill,
+      `1-on-1 Exchange: ${currentUser.skillsToTeach[0]?.skillName || 'Skill'} ⇄ ${activeChatPeer.skill}`
     );
-    showToast(`Entering Live Study Room with ${activeChatPeer.name}...`, 'success');
     closeChat();
     if (onNavigate) {
       onNavigate('session');

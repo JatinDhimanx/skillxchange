@@ -22,6 +22,7 @@ import {
   PeerChatMessage,
   ChatPeerInfo,
   BarterSwapProposal,
+  IncomingCallInvite,
 } from '../types';
 import {
   USERS,
@@ -36,7 +37,7 @@ import {
   SEED_NOTEBOOK_ENTRIES,
   SEED_CREDENTIAL_LEDGER,
 } from '../data/seedData';
-import { isSupabaseConfigured } from '../lib/supabase/client';
+import { supabase, isSupabaseConfigured } from '../lib/supabase/client';
 import {
   fetchProfilesFromDB,
   fetchSkillsFromDB,
@@ -50,6 +51,10 @@ import {
   fetchChatMessagesFromDB,
   saveChatMessageToDB,
   updateProfileInDB,
+  addTeachingSkillToDB,
+  removeTeachingSkillFromDB,
+  addLearningGoalToDB,
+  removeLearningGoalFromDB,
 } from '../lib/supabase/services';
 import {
   signUpUser,
@@ -80,24 +85,30 @@ export type NavigationTab =
   | 'transcript_proof'
   | 'dynamic_economy'
   | 'dynamic-economy'
+  | 'bounties'
   | 'bounty_board'
   | 'bounty-board'
+  | 'fusion'
   | 'fusion_sessions'
   | 'fusion-sessions'
   | 'predictive_matches'
   | 'predictive-matches'
   | 'second_brain'
   | 'second-brain'
+  | 'credentials'
   | 'credential_ledger'
   | 'credential-ledger'
+  | 'soft_skills'
   | 'soft_skills_lab'
   | 'soft-skills-lab'
   | 'verification_center'
   | 'verification-center'
+  | 'college'
   | 'college_hub'
   | 'college-hub'
   | 'admin_dashboard'
-  | 'admin-panel';
+  | 'admin-panel'
+  | 'progress';
 
 export interface LedgerTransaction {
   id: string;
@@ -116,33 +127,30 @@ export interface ActivityNotification {
   read: boolean;
 }
 
-interface AppContextType {
-  // Navigation
+export interface AppContextType {
   activeTab: NavigationTab;
   setActiveTab: (tab: NavigationTab) => void;
-
-  // Current persona & users
   currentUser: UserProfile;
   allUsers: UserProfile[];
   switchUser: (userId: string) => void;
   updateCurrentUserProfile: (bio: string, headline: string) => void;
 
-  // Skills Management (Dynamic addition/removal)
+  // Skills Catalog
   skills: Skill[];
   addSkillToTeach: (skillName: string, category: string, level: string, years: number) => void;
   removeSkillToTeach: (skillId: string) => void;
   addSkillToLearn: (skillName: string, targetLevel: string, urgency: string) => void;
   removeSkillToLearn: (skillId: string) => void;
 
-  // Direct Matching & Barter Swaps
+  // Matching Engine
   candidates: MatchCandidate[];
   swapProposals: BarterSwapProposal[];
   sendExchangeProposal: (targetUserId: string, offeredSkill: string, wantedSkill: string, notes?: string) => void;
   acceptExchangeProposal: (proposalId: string) => void;
   declineExchangeProposal: (proposalId: string) => void;
-  bookPaidTeacher: (teacherId: string, skillName: string, rateInr: number) => void;
+  bookPaidTeacher: (teacherId: string, skillName: string, rateInr?: number) => void;
 
-  // Skill Chains & Futures (60.1)
+  // 3-Way Chains (60.1)
   skillChains: SkillChain[];
   futureCommitments: FutureCommitment[];
   createFutureCommitment: (skillLearning: string, skillToTeach: string, maturityDays: number) => void;
@@ -192,9 +200,15 @@ interface AppContextType {
 
   // Live Session Room
   activeSession: LiveSessionState | null;
-  startLiveSession: (title: string, teacherName: string, learnerName: string, skillName: string) => void;
+  startLiveSession: (title: string, teacherName: string, learnerName: string, skillName: string, roomCode?: string) => void;
   endLiveSession: () => void;
   releaseEscrow: () => void;
+
+  // Incoming Live Study Room Call Invite
+  incomingCallInvite: IncomingCallInvite | null;
+  invitePeerToStudyRoom: (peerId: string, skillName: string, title?: string) => void;
+  acceptIncomingCall: () => void;
+  declineIncomingCall: () => void;
 
   // Notifications & Activity Feed
   notifications: ActivityNotification[];
@@ -678,6 +692,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [peerConversations, setPeerConversations] = useState<Record<string, PeerChatMessage[]>>({});
   const [isPeerTyping, setIsPeerTyping] = useState<Record<string, boolean>>({});
 
+  // Realtime Incoming Call Invite State
+  const [incomingCallInvite, setIncomingCallInvite] = useState<IncomingCallInvite | null>(null);
+  const globalRealtimeChannelRef = useRef<any>(null);
+
+  // ── Global Supabase Realtime Channel (Live Chat & Study Room Invites) ────────
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const channel = supabase.channel('skillxchange_global_network', {
+      config: { broadcast: { self: false } },
+    });
+
+    channel
+      .on('broadcast', { event: 'peer_chat_message' }, ({ payload }) => {
+        if (payload && payload.receiverId === currentUser.id) {
+          const newMsg: PeerChatMessage = {
+            id: payload.id || `msg-${Date.now()}`,
+            senderId: payload.senderId,
+            senderName: payload.senderName,
+            senderAvatar: payload.senderAvatar,
+            text: payload.text,
+            timestamp: payload.timestamp,
+            isMe: false,
+            status: 'read',
+            type: payload.type,
+            proposalData: payload.proposalData,
+          };
+
+          setPeerConversations(prev => ({
+            ...prev,
+            [payload.senderId]: [...(prev[payload.senderId] || []), newMsg],
+          }));
+
+          if (!activeChatPeer || activeChatPeer.id !== payload.senderId) {
+            addNotification(`New message from ${payload.senderName}`, payload.text, 'match');
+            showToast(`New message from ${payload.senderName}`, 'info');
+          }
+        }
+      })
+      .on('broadcast', { event: 'room_invite' }, ({ payload }) => {
+        if (payload && payload.toUserId === currentUser.id) {
+          setIncomingCallInvite(payload);
+          addNotification(`Incoming Study Room Call`, `${payload.fromUserName} invited you to: ${payload.title}`, 'match');
+          showToast(`📞 Incoming Study Room call from ${payload.fromUserName}!`, 'success');
+        }
+      })
+      .subscribe();
+
+    globalRealtimeChannelRef.current = channel;
+
+    return () => {
+      supabase?.removeChannel(channel);
+    };
+  }, [currentUser.id, activeChatPeer]);
+
   // ── Supabase Dynamic Hydration ────────────────────────────
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -690,17 +759,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetchBountiesFromDB(),
           fetchCredentialLedgerFromDB(),
           fetchNotebookEntriesFromDB(),
-          fetchChatMessagesFromDB(),
+          fetchChatMessagesFromDB(currentUser.id),
         ]);
 
         if (dbProfiles && dbProfiles.length > 0) {
-          const combined = [...dbProfiles];
-          USERS.forEach(seed => {
-            if (!combined.some(p => p.id === seed.id || p.handle === seed.handle)) {
-              combined.push(seed);
-            }
-          });
-          setAllUsers(combined);
+          setAllUsers(dbProfiles);
           setCurrentUser(dbProfiles[0]);
         }
         if (dbSkills && dbSkills.length > 0) setSkills(dbSkills);
@@ -718,7 +781,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     hydrateFromSupabase();
-  }, []);
+  }, [currentUser.id]);
 
   const openChatWithPeer = (peer: ChatPeerInfo) => {
     if (!isAuthenticated) {
@@ -770,42 +833,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       [peerId]: [...(prev[peerId] || []), userMsg],
     }));
 
+    // Persist real message to Supabase DB
     saveChatMessageToDB(currentUser.id, peerId, userMsg);
 
-    // Simulated peer typing & response
-    setTimeout(() => {
-      setIsPeerTyping(prev => ({ ...prev, [peerId]: true }));
-    }, 800);
-
-    setTimeout(() => {
-      setIsPeerTyping(prev => ({ ...prev, [peerId]: false }));
-      const peerObj = allUsers.find(u => u.id === peerId);
-      const peerName = peerObj?.name || 'Peer';
-      const peerAvatar = peerObj?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
-
-      const replies = [
-        `Sounds great! I'd love to swap skills. When are you free for a hands-on session?`,
-        `Perfect! I've been looking for practical practice on this topic. Let's start a Study Room whenever you're ready!`,
-        `I checked your profile and trust score — looks awesome! Let's lock our barter proposal and get started.`,
-      ];
-      const randomReply = replies[Math.floor(Math.random() * replies.length)];
-
-      const peerMsg: PeerChatMessage = {
-        id: `msg-resp-${Date.now()}`,
-        senderId: peerId,
-        senderName: peerName,
-        senderAvatar: peerAvatar,
-        text: randomReply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isMe: false,
-        status: 'read',
-      };
-
-      setPeerConversations(prev => ({
-        ...prev,
-        [peerId]: [...(prev[peerId] || []), peerMsg],
-      }));
-    }, 2400);
+    // Live broadcast to peer over Supabase Realtime channel
+    globalRealtimeChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'peer_chat_message',
+      payload: { ...userMsg, receiverId: peerId },
+    });
   };
 
   const clearPeerChat = (peerId: string) => {
@@ -850,7 +886,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Profile updated successfully!', 'success');
   };
 
-  // Dynamic Skill Offering Addition
+  // Dynamic Skill Offering Addition & DB Sync
   const addSkillToTeach = (skillName: string, category: string, level: string, years: number) => {
     const newOffering: UserSkillOffering = {
       skillId: `skill-${Date.now()}`,
@@ -869,7 +905,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updatedUser = { ...currentUser, skillsToTeach: updatedTeach };
     setCurrentUser(updatedUser);
     setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updatedUser : u)));
-    showToast(`Added "${skillName}" to teaching skills! Recalculating matches...`, 'success');
+
+    // Async persist to Supabase
+    addTeachingSkillToDB(currentUser.id, {
+      id: newOffering.skillId,
+      skillName,
+      category,
+      level,
+      yearsExperience: years,
+      hourlyRateCredits: 1.2,
+      hourlyRateInr: 450,
+    });
+
+    showToast(`Published "${skillName}" to your skills! Recalculating matches...`, 'success');
   };
 
   const removeSkillToTeach = (skillId: string) => {
@@ -877,10 +925,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updatedUser = { ...currentUser, skillsToTeach: updatedTeach };
     setCurrentUser(updatedUser);
     setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updatedUser : u)));
-    showToast('Skill removed from teaching profile.', 'info');
+
+    // Async delete from Supabase
+    removeTeachingSkillFromDB(skillId);
+
+    showToast('Skill removed from profile.', 'info');
   };
 
-  // Dynamic Learning Goal Addition
+  // Dynamic Learning Goal Addition & DB Sync
   const addSkillToLearn = (skillName: string, targetLevel: string, urgency: string) => {
     const newGoal: UserLearningGoal = {
       skillId: `learn-${Date.now()}`,
@@ -897,7 +949,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updatedUser = { ...currentUser, skillsToLearn: updatedLearn };
     setCurrentUser(updatedUser);
     setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updatedUser : u)));
-    showToast(`Added "${skillName}" to learning roadmap! Searching for instructors...`, 'success');
+
+    // Async persist to Supabase
+    addLearningGoalToDB(currentUser.id, {
+      id: newGoal.skillId,
+      skillName,
+      targetLevel,
+      urgency,
+    });
+
+    showToast(`Added "${skillName}" to learning goals! Searching for peers...`, 'success');
   };
 
   const removeSkillToLearn = (skillId: string) => {
@@ -905,7 +966,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updatedUser = { ...currentUser, skillsToLearn: updatedLearn };
     setCurrentUser(updatedUser);
     setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updatedUser : u)));
+
+    // Async delete from Supabase
+    removeLearningGoalFromDB(skillId);
+
     showToast('Learning goal removed.', 'info');
+  };
+
+  // Live Study Room Real-Time Calling System
+  const invitePeerToStudyRoom = (peerId: string, skillName: string, title?: string) => {
+    const roomCode = `ROOM-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const peerObj = allUsers.find(u => u.id === peerId);
+    const peerName = peerObj?.name || 'Peer Mentor';
+    const sessionTitle = title || `1-on-1 Exchange: ${skillName}`;
+
+    // Launch local session for host
+    startLiveSession(sessionTitle, peerName, currentUser.name, skillName, roomCode);
+    setActiveTab('session');
+
+    // Broadcast realtime call invite to peer
+    globalRealtimeChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'room_invite',
+      payload: {
+        roomCode,
+        title: sessionTitle,
+        fromUserId: currentUser.id,
+        fromUserName: currentUser.name,
+        fromUserAvatar: currentUser.avatar,
+        toUserId: peerId,
+        skillName,
+        timestamp: Date.now(),
+      },
+    });
+
+    showToast(`Calling ${peerName}... Study Room [${roomCode}] launched!`, 'success');
+  };
+
+  const acceptIncomingCall = () => {
+    if (!incomingCallInvite) return;
+    startLiveSession(
+      incomingCallInvite.title,
+      incomingCallInvite.fromUserName,
+      currentUser.name,
+      incomingCallInvite.skillName,
+      incomingCallInvite.roomCode
+    );
+    setActiveTab('session');
+    showToast(`Connecting to ${incomingCallInvite.fromUserName}'s Study Room [${incomingCallInvite.roomCode}]...`, 'success');
+    setIncomingCallInvite(null);
+  };
+
+  const declineIncomingCall = () => {
+    setIncomingCallInvite(null);
+    showToast('Study Room invitation declined.', 'info');
   };
 
   // Dynamic Matching Engine with intelligent token and substring matching
@@ -1131,7 +1245,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Swap proposal declined.', 'info');
   };
 
-  const bookPaidTeacher = (teacherId: string, skillName: string, rateInr: number) => {
+  const bookPaidTeacher = (teacherId: string, skillName: string, rateInr: number = 450) => {
     const teacher = allUsers.find(u => u.id === teacherId);
     showToast(`Session booked with ${teacher?.name || 'Instructor'} for ₹${rateInr}/hr (Escrow Held).`, 'success');
     startLiveSession(`1-on-1 Mentorship: ${skillName}`, teacher?.name || 'Instructor', currentUser.name, skillName);
@@ -1404,9 +1518,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Live Session
-  const startLiveSession = (title: string, teacherName: string, learnerName: string, skillName: string) => {
+  const startLiveSession = (title: string, teacherName: string, learnerName: string, skillName: string, roomCode?: string) => {
+    const code = roomCode || `ROOM-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const session: LiveSessionState = {
       id: `sess-${Date.now()}`,
+      roomCode: code,
       title,
       teacherName,
       learnerName,
@@ -1420,13 +1536,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       whiteboardActiveTool: 'pen',
       escrowStatus: 'held_in_escrow',
       objectives: [
-        { id: 'obj-1', text: 'Vectorized NumPy & Pandas Memory Architecture', completed: true },
-        { id: 'obj-2', text: 'Live Multi-Key GroupBy Aggregation Practice', completed: false },
-        { id: 'obj-3', text: 'AI Session Summary & Micro-Quiz Verification', completed: false },
-      ]
+        { id: 'obj-1', text: 'Live Vectorized Concept Exchange', completed: true },
+        { id: 'obj-2', text: 'Collaborative Practice & Whiteboard', completed: false },
+        { id: 'obj-3', text: 'Peer Micro-Quiz & Ledger Attestation', completed: false },
+      ],
     };
     setActiveSession(session);
-    showToast(`Study Room opened: ${title}`, 'success');
+    showToast(`Study Room [${code}] opened!`, 'success');
   };
 
   const endLiveSession = () => {
@@ -1499,6 +1615,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         startLiveSession,
         endLiveSession,
         releaseEscrow,
+        incomingCallInvite,
+        invitePeerToStudyRoom,
+        acceptIncomingCall,
+        declineIncomingCall,
         notifications,
         markNotificationAsRead,
         markAllNotificationsAsRead,

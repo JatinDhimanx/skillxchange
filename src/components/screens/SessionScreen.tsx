@@ -397,6 +397,22 @@ export const SessionScreen: React.FC = () => {
     }
   }, []);
 
+  // Auto-connect to live_meeting when activeSession is updated from context
+  useEffect(() => {
+    if (activeSession && activeSession.roomCode) {
+      setActiveMeeting({
+        id: activeSession.id,
+        roomCode: activeSession.roomCode,
+        topic: activeSession.title,
+        skill: activeSession.skillName,
+        instructorName: activeSession.teacherName,
+        instructorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+        isHost: activeSession.teacherName === currentUser.name,
+      });
+      setSessionView('live_meeting');
+    }
+  }, [activeSession]);
+
   // Auto-start camera when entering live_meeting
   useEffect(() => {
     let activeStream: MediaStream | null = null;

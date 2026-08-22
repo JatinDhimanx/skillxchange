@@ -300,6 +300,7 @@ export interface SoftSkillPracticeMetrics {
 // Live Session Room
 export interface LiveSessionState {
   id: string;
+  roomCode?: string;
   title: string;
   teacherName: string;
   learnerName: string;
@@ -315,6 +316,17 @@ export interface LiveSessionState {
   whiteboardActiveTool: 'pen' | 'rect' | 'circle' | 'text' | 'eraser';
   objectives: { id: string; text: string; completed: boolean }[];
   escrowStatus: 'held_in_escrow' | 'teacher_completed' | 'learner_confirmed_released' | 'disputed';
+}
+
+export interface IncomingCallInvite {
+  roomCode: string;
+  title: string;
+  fromUserId: string;
+  fromUserName: string;
+  fromUserAvatar: string;
+  toUserId: string;
+  skillName: string;
+  timestamp: number;
 }
 
 // Peer Chat System

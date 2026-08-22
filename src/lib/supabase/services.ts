@@ -111,6 +111,83 @@ export async function updateProfileInDB(userId: string, updates: { headline?: st
   }
 }
 
+export async function addTeachingSkillToDB(
+  userId: string,
+  skill: {
+    id: string;
+    skillName: string;
+    category: string;
+    level: string;
+    yearsExperience: number;
+    hourlyRateCredits: number;
+    hourlyRateInr: number;
+  }
+) {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('user_skills_teaching').insert({
+      id: skill.id,
+      user_id: userId,
+      skill_name: skill.skillName,
+      category: skill.category,
+      level: skill.level,
+      years_experience: skill.yearsExperience,
+      hourly_rate_credits: skill.hourlyRateCredits,
+      hourly_rate_inr: skill.hourlyRateInr,
+      verified: true,
+      proof_count: 1,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function removeTeachingSkillFromDB(skillId: string) {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('user_skills_teaching').delete().eq('id', skillId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function addLearningGoalToDB(
+  userId: string,
+  goal: {
+    id: string;
+    skillName: string;
+    targetLevel: string;
+    urgency: string;
+  }
+) {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('user_skills_learning').insert({
+      id: goal.id,
+      user_id: userId,
+      skill_name: goal.skillName,
+      target_level: goal.targetLevel,
+      urgency: goal.urgency,
+      progress_percent: 15,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function removeLearningGoalFromDB(goalId: string) {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('user_skills_learning').delete().eq('id', goalId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================================
 // 2. SKILLS DIRECTORY SERVICE
 // ============================================================================
@@ -358,7 +435,7 @@ export async function saveNotebookEntryToDB(entry: NotebookEntry) {
 // ============================================================================
 // 6. CHAT MESSAGES SERVICE
 // ============================================================================
-export async function fetchChatMessagesFromDB(): Promise<Record<string, PeerChatMessage[]> | null> {
+export async function fetchChatMessagesFromDB(currentUserId?: string): Promise<Record<string, PeerChatMessage[]> | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
     const { data, error } = await supabase
@@ -370,7 +447,8 @@ export async function fetchChatMessagesFromDB(): Promise<Record<string, PeerChat
 
     const conversations: Record<string, PeerChatMessage[]> = {};
     data.forEach(m => {
-      const peerId = m.sender_id === 'user-1' ? m.receiver_id : m.sender_id;
+      const isSender = currentUserId ? m.sender_id === currentUserId : m.sender_id === 'guest';
+      const peerId = isSender ? m.receiver_id : m.sender_id;
       if (!conversations[peerId]) {
         conversations[peerId] = [];
       }
@@ -381,7 +459,7 @@ export async function fetchChatMessagesFromDB(): Promise<Record<string, PeerChat
         senderAvatar: m.sender_avatar,
         text: m.text,
         timestamp: m.timestamp,
-        isMe: m.sender_id === 'user-1',
+        isMe: isSender,
         status: m.is_read ? 'read' : 'sent',
       });
     });
