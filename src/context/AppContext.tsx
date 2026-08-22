@@ -50,7 +50,15 @@ import {
   saveChatMessageToDB,
   updateProfileInDB,
 } from '../lib/supabase/services';
-import { signUpUser, signInUser, signOutUser, onAuthStateChanged, SignUpData } from '../lib/supabase/auth';
+import {
+  signUpUser,
+  signInUser,
+  signOutUser,
+  onAuthStateChanged,
+  fetchUserProfile,
+  resendVerificationEmail,
+  SignUpData
+} from '../lib/supabase/auth';
 
 export type NavigationTab =
   | 'home'
@@ -210,43 +218,137 @@ interface AppContextType {
   authModalTab: 'signin' | 'signup';
   openAuthModal: (tab?: 'signin' | 'signup') => void;
   closeAuthModal: () => void;
-  loginUser: (email: string, pass: string) => Promise<boolean>;
-  registerUser: (data: SignUpData) => Promise<boolean>;
+  loginUser: (email: string, pass: string) => Promise<{ success: boolean; error: string | null }>;
+  registerUser: (data: SignUpData) => Promise<{ success: boolean; needsEmailVerification: boolean; error: string | null }>;
+  resendVerification: (email: string) => Promise<boolean>;
   logoutUser: () => Promise<void>;
 }
+
+const BLANK_GUEST_USER: UserProfile = {
+  id: 'guest',
+  name: 'New Peer',
+  handle: '@guest',
+  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  headline: 'Exploring SkillXchange',
+  bio: '',
+  location: 'India',
+  timezone: 'IST',
+  college: 'Peer Network',
+  collegeVerified: false,
+  languages: ['English'],
+  skillsToTeach: [],
+  skillsToLearn: [],
+  creditsBalance: 5.0,
+  totalCreditsEarned: 0,
+  totalCreditsSpent: 0,
+  teachingHours: 0,
+  learningHours: 0,
+  trustScore: {
+    identityVerified: false,
+    skillVerifiedCount: 0,
+    completedSessions: 0,
+    attendanceRate: 100,
+    averageRating: 5.0,
+    cancellationRate: 0,
+    responseRate: 100,
+    accountAgeMonths: 0,
+    overallScore: 90,
+  },
+  streakDays: 1,
+  xpPoints: 0,
+  badges: [],
+  role: 'user',
+};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('home');
-  const [allUsers, setAllUsers] = useState<UserProfile[]>(USERS);
-  const [currentUser, setCurrentUser] = useState<UserProfile>(USERS[0]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserProfile>(BLANK_GUEST_USER);
   const [skills, setSkills] = useState<Skill[]>(INITIAL_SKILLS);
 
-  // Auth & Session State (Starts fresh / unauthenticated or restores from session)
+  // Auth & Session State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
 
-  // Check saved session on mount (or open sign-in/sign-up for fresh user)
-  useEffect(() => {
+  // Hydrate all database data
+  const hydrateAllData = async (user: UserProfile) => {
     try {
-      const savedUser = localStorage.getItem('skillxchange_active_user');
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        if (parsed && parsed.id) {
-          setCurrentUser(parsed);
-          setIsAuthenticated(true);
-          return;
-        }
+      const [dbProfiles, dbSkills, dbBounties, dbLedger, dbNotes] = await Promise.all([
+        fetchProfilesFromDB(),
+        fetchSkillsFromDB(),
+        fetchBountiesFromDB(),
+        fetchCredentialLedgerFromDB(),
+        fetchNotebookEntriesFromDB(),
+      ]);
+
+      if (dbProfiles && dbProfiles.length > 0) {
+        setAllUsers(dbProfiles);
+      } else {
+        setAllUsers([user]);
       }
-    } catch {
-      // Ignore localStorage read errors
-    }
-    // If not authenticated, open Auth modal on load
-    setAuthModalOpen(true);
-    setAuthModalTab('signup');
+
+      if (dbSkills && dbSkills.length > 0) {
+        setSkills(dbSkills);
+      }
+
+      if (dbBounties && dbBounties.length > 0) {
+        setBounties(dbBounties);
+      }
+
+      if (dbLedger && dbLedger.length > 0) {
+        setCredentialLedger(dbLedger);
+      }
+
+      if (dbNotes && dbNotes.length > 0) {
+        setNotebookEntries(dbNotes);
+      }
+    } catch {}
+  };
+
+  // Restore session on mount & listen to Supabase Auth state changes
+  useEffect(() => {
+    setIsAuthLoading(true);
+
+    const unsubscribe = onAuthStateChanged(async (event, session) => {
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user.id);
+        if (profile) {
+          setCurrentUser(profile);
+          setIsAuthenticated(true);
+          setAuthModalOpen(false);
+          try {
+            localStorage.setItem('skillxchange_active_user', JSON.stringify(profile));
+          } catch {}
+          hydrateAllData(profile);
+        }
+      } else {
+        const saved = localStorage.getItem('skillxchange_active_user');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.id && parsed.id !== 'guest') {
+              setCurrentUser(parsed);
+              setIsAuthenticated(true);
+              hydrateAllData(parsed);
+              setIsAuthLoading(false);
+              return;
+            }
+          } catch {}
+        }
+        setIsAuthenticated(false);
+        setAuthModalOpen(true);
+        setAuthModalTab('signin');
+      }
+      setIsAuthLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const openAuthModal = (tab: 'signin' | 'signup' = 'signin') => {
@@ -258,58 +360,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthModalOpen(false);
   };
 
-  const loginUser = async (email: string, pass: string): Promise<boolean> => {
+  const loginUser = async (email: string, pass: string): Promise<{ success: boolean; error: string | null }> => {
     setIsAuthLoading(true);
     try {
-      const { session, error } = await signInUser({ email, password: pass });
-      const cleanEmail = email.toLowerCase().trim();
-      const matched = allUsers.find(
-        u =>
-          cleanEmail.includes(u.name.toLowerCase().split(' ')[0]) ||
-          cleanEmail.includes(u.handle.replace('@', '').toLowerCase())
-      );
-
-      if (matched) {
-        setCurrentUser(matched);
-        setIsAuthenticated(true);
-        try {
-          localStorage.setItem('skillxchange_active_user', JSON.stringify(matched));
-        } catch {}
-        showToast(`Welcome back, ${matched.name}!`, 'success');
-        return true;
-      }
-
-      if (error && !matched) {
-        showToast(error, 'warning');
-        return false;
-      }
-
-      setIsAuthenticated(true);
-      showToast('Welcome back! Logged in successfully.', 'success');
-      return true;
-    } catch {
-      return false;
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  const registerUser = async (data: SignUpData): Promise<boolean> => {
-    setIsAuthLoading(true);
-    try {
-      const { user, error } = await signUpUser(data);
+      const { user, session, error } = await signInUser({ email, password: pass });
       if (error) {
         showToast(error, 'warning');
-        return false;
+        return { success: false, error };
       }
+
       if (user) {
-        setAllUsers(prev => [user, ...prev]);
         setCurrentUser(user);
         setIsAuthenticated(true);
         try {
           localStorage.setItem('skillxchange_active_user', JSON.stringify(user));
         } catch {}
+        hydrateAllData(user);
+        showToast(`Welcome back, ${user.name}!`, 'success');
+        return { success: true, error: null };
+      }
+
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user.id);
+        if (profile) {
+          setCurrentUser(profile);
+          setIsAuthenticated(true);
+          try {
+            localStorage.setItem('skillxchange_active_user', JSON.stringify(profile));
+          } catch {}
+          hydrateAllData(profile);
+          showToast(`Welcome back, ${profile.name}!`, 'success');
+          return { success: true, error: null };
+        }
+      }
+
+      setIsAuthenticated(true);
+      showToast('Logged in successfully.', 'success');
+      return { success: true, error: null };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const registerUser = async (
+    data: SignUpData
+  ): Promise<{ success: boolean; needsEmailVerification: boolean; error: string | null }> => {
+    setIsAuthLoading(true);
+    try {
+      const { user, needsEmailVerification, error } = await signUpUser(data);
+      if (error) {
+        showToast(error, 'warning');
+        return { success: false, needsEmailVerification: false, error };
+      }
+
+      if (user) {
+        setAllUsers(prev => [user, ...prev.filter(u => u.id !== user.id)]);
         
+        if (!needsEmailVerification) {
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+          try {
+            localStorage.setItem('skillxchange_active_user', JSON.stringify(user));
+          } catch {}
+          hydrateAllData(user);
+        }
+
         // Dynamically register new skill into global catalog
         if (data.teachSkill) {
           const newSkillObj: Skill = {
@@ -355,21 +472,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
         ]);
 
-        showToast(`Welcome to SkillXchange, ${user.name}! +5.0 Barter Credits granted.`, 'success');
-        return true;
+        return { success: true, needsEmailVerification, error: null };
       }
-      return false;
-    } catch {
-      return false;
+      return { success: false, needsEmailVerification: false, error: 'Signup failed.' };
+    } catch (err: any) {
+      return { success: false, needsEmailVerification: false, error: err.message };
     } finally {
       setIsAuthLoading(false);
     }
+  };
+
+  const resendVerification = async (email: string): Promise<boolean> => {
+    const { error } = await resendVerificationEmail(email);
+    if (error) {
+      showToast(error, 'warning');
+      return false;
+    }
+    showToast(`Verification email resent to ${email}!`, 'success');
+    return true;
   };
 
   const logoutUser = async () => {
     setIsAuthLoading(true);
     await signOutUser();
     setIsAuthenticated(false);
+    setCurrentUser(BLANK_GUEST_USER);
     try {
       localStorage.removeItem('skillxchange_active_user');
     } catch {}
@@ -1153,6 +1280,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         closeAuthModal,
         loginUser,
         registerUser,
+        resendVerification,
         logoutUser,
       }}
     >

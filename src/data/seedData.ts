@@ -12,18 +12,22 @@ import {
   CredentialBlock,
 } from '../types';
 
+// Zero fake users: All real users load dynamically from Supabase database
+export const USERS: UserProfile[] = [];
+
+// Base initial taxonomy categories (loaded dynamically from database)
 export const INITIAL_SKILLS: Skill[] = [
   {
     id: 'skill-python',
-    name: 'Python for Data Science',
+    name: 'Python & AI Engineering',
     category: 'Programming',
     subcategory: 'Data Science',
     description: 'Pandas, NumPy, Scikit-learn, automation scripts, and statistical computing.',
     difficulty: 'Intermediate',
-    tags: ['Python', 'Data Science', 'Pandas', 'Analytics'],
+    tags: ['Python', 'AI', 'Data Science', 'Analytics'],
     demandMultiplier: 1.4,
-    activeTeachers: 42,
-    activeLearners: 128,
+    activeTeachers: 0,
+    activeLearners: 0,
     marketRateCredits: 1.4,
     marketRateInr: 450,
   },
@@ -36,24 +40,10 @@ export const INITIAL_SKILLS: Skill[] = [
     difficulty: 'Advanced',
     tags: ['React', 'Next.js', 'Frontend', 'TypeScript'],
     demandMultiplier: 1.2,
-    activeTeachers: 58,
-    activeLearners: 110,
+    activeTeachers: 0,
+    activeLearners: 0,
     marketRateCredits: 1.2,
     marketRateInr: 400,
-  },
-  {
-    id: 'skill-glsl',
-    name: 'Advanced GLSL & WebGL Shaders',
-    category: 'Programming',
-    subcategory: 'Creative Coding',
-    description: 'Mathematical 3D rendering, fragment shaders, raymarching, Three.js shaders.',
-    difficulty: 'Expert',
-    tags: ['GLSL', 'Shaders', 'WebGL', 'Three.js', 'Math'],
-    demandMultiplier: 2.8,
-    activeTeachers: 4,
-    activeLearners: 89,
-    marketRateCredits: 2.8,
-    marketRateInr: 1200,
   },
   {
     id: 'skill-guitar',
@@ -64,38 +54,10 @@ export const INITIAL_SKILLS: Skill[] = [
     difficulty: 'Beginner',
     tags: ['Music', 'Guitar', 'Fingerstyle', 'Acoustic'],
     demandMultiplier: 1.0,
-    activeTeachers: 35,
-    activeLearners: 42,
+    activeTeachers: 0,
+    activeLearners: 0,
     marketRateCredits: 1.0,
     marketRateInr: 300,
-  },
-  {
-    id: 'skill-english',
-    name: 'Business English & Negotiations',
-    category: 'Languages',
-    subcategory: 'Communication',
-    description: 'Corporate articulation, pitch delivery, cross-cultural nuance, accent clarity.',
-    difficulty: 'Intermediate',
-    tags: ['English', 'Business', 'Public Speaking', 'Fluency'],
-    demandMultiplier: 1.1,
-    activeTeachers: 62,
-    activeLearners: 95,
-    marketRateCredits: 1.1,
-    marketRateInr: 350,
-  },
-  {
-    id: 'skill-japanese',
-    name: 'Conversational Japanese (N4/N3)',
-    category: 'Languages',
-    subcategory: 'Asian Languages',
-    description: 'Kanji immersion, natural conversational grammar, travel fluency, anime dialogues.',
-    difficulty: 'Intermediate',
-    tags: ['Japanese', 'JLPT', 'Kanji', 'Conversation'],
-    demandMultiplier: 1.9,
-    activeTeachers: 8,
-    activeLearners: 74,
-    marketRateCredits: 1.9,
-    marketRateInr: 650,
   },
   {
     id: 'skill-uiux',
@@ -106,976 +68,68 @@ export const INITIAL_SKILLS: Skill[] = [
     difficulty: 'Advanced',
     tags: ['Figma', 'UI/UX', 'Design Systems', 'Prototyping'],
     demandMultiplier: 1.3,
-    activeTeachers: 40,
-    activeLearners: 88,
+    activeTeachers: 0,
+    activeLearners: 0,
     marketRateCredits: 1.3,
     marketRateInr: 450,
-  },
-  {
-    id: 'skill-public-speaking',
-    name: 'Debate & Public Speaking',
-    category: 'Soft Skills',
-    subcategory: 'Leadership',
-    description: 'Voice modulation, impromptu rhetoric, persuasive argument structures, stage presence.',
-    difficulty: 'Intermediate',
-    tags: ['Debate', 'Speaking', 'Rhetoric', 'Confidence'],
-    demandMultiplier: 1.5,
-    activeTeachers: 14,
-    activeLearners: 63,
-    marketRateCredits: 1.5,
-    marketRateInr: 500,
   }
 ];
 
-export const USERS: UserProfile[] = [
-  {
-    id: 'user-alex',
-    name: 'Alex Rivera',
-    handle: '@alex_code',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    headline: 'Senior Fullstack Engineer & Open-Source Contributor',
-    bio: 'Building web apps for 6+ years. Passionate about teaching Python & React in exchange for acoustic guitar and vocal coaching.',
-    location: 'Bengaluru, India',
-    timezone: 'IST (UTC+5:30)',
-    college: 'IIT Delhi',
-    collegeVerified: true,
-    languages: ['English (Fluent)', 'Hindi (Fluent)', 'Spanish (Basic)'],
-    creditsBalance: 8.5,
-    totalCreditsEarned: 24.0,
-    totalCreditsSpent: 15.5,
-    teachingHours: 32,
-    learningHours: 21,
-    streakDays: 9,
-    xpPoints: 3450,
-    role: 'user',
-    trustScore: {
-      identityVerified: true,
-      skillVerifiedCount: 3,
-      completedSessions: 28,
-      attendanceRate: 98,
-      averageRating: 4.95,
-      cancellationRate: 2,
-      responseRate: 99,
-      accountAgeMonths: 14,
-      overallScore: 96,
-    },
-    skillsToTeach: [
-      {
-        skillId: 'skill-python',
-        skillName: 'Python for Data Science',
-        category: 'Programming',
-        level: 'Advanced',
-        yearsExperience: 4,
-        verified: true,
-        verificationBadge: 'Verified Master',
-        hourlyRateInr: 450,
-        hourlyRateCredits: 1.4,
-        proofCount: 14,
-      },
-      {
-        skillId: 'skill-react',
-        skillName: 'React & Next.js Fullstack',
-        category: 'Programming',
-        level: 'Expert',
-        yearsExperience: 6,
-        verified: true,
-        verificationBadge: 'Top Educator',
-        hourlyRateInr: 500,
-        hourlyRateCredits: 1.5,
-        proofCount: 19,
-      }
-    ],
-    skillsToLearn: [
-      {
-        skillId: 'skill-guitar',
-        skillName: 'Acoustic Guitar & Fingerstyle',
-        targetLevel: 'Intermediate',
-        urgency: 'career_switch',
-        targetDateWeeks: 6,
-        currentRoadmapStep: 3,
-        totalRoadmapSteps: 8,
-        progressPercent: 37,
-      },
-      {
-        skillId: 'skill-english',
-        skillName: 'Business English & Negotiations',
-        targetLevel: 'Advanced',
-        urgency: 'flexible',
-        targetDateWeeks: 10,
-        currentRoadmapStep: 2,
-        totalRoadmapSteps: 6,
-        progressPercent: 30,
-      }
-    ],
-    badges: [
-      {
-        id: 'badge-1',
-        title: 'Chain Catalyst',
-        description: 'Completed a 3-person Skill Chain cycle without fiat money',
-        icon: '🔗',
-        category: 'chain',
-        unlockedAt: '2026-08-10',
-      },
-      {
-        id: 'badge-2',
-        title: '🔥 7-Day Teaching Streak',
-        description: 'Completed verified peer exchanges 7 days in a row',
-        icon: '🔥',
-        category: 'teaching',
-        unlockedAt: '2026-08-18',
-      },
-      {
-        id: 'badge-3',
-        title: 'Proof of Learning Pioneer',
-        description: 'Earned 10+ transcript-verified skill credentials',
-        icon: '📜',
-        category: 'verification',
-        unlockedAt: '2026-08-20',
-      }
-    ]
-  },
-  {
-    id: 'user-maya',
-    name: 'Maya Chen',
-    handle: '@maya_strings',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    headline: 'Classical & Fingerstyle Guitarist | Polyglot',
-    bio: 'Touring musician & acoustic instructor. Looking to polish my corporate Business English for global workshop tours.',
-    location: 'Singapore',
-    timezone: 'SGT (UTC+8:00)',
-    college: 'NUS Singapore',
-    collegeVerified: true,
-    languages: ['English (Fluent)', 'Mandarin (Native)'],
-    creditsBalance: 12.0,
-    totalCreditsEarned: 40.0,
-    totalCreditsSpent: 28.0,
-    teachingHours: 45,
-    learningHours: 30,
-    streakDays: 14,
-    xpPoints: 4800,
-    role: 'user',
-    trustScore: {
-      identityVerified: true,
-      skillVerifiedCount: 2,
-      completedSessions: 42,
-      attendanceRate: 100,
-      averageRating: 4.98,
-      cancellationRate: 0,
-      responseRate: 97,
-      accountAgeMonths: 18,
-      overallScore: 98,
-    },
-    skillsToTeach: [
-      {
-        skillId: 'skill-guitar',
-        skillName: 'Acoustic Guitar & Fingerstyle',
-        category: 'Arts & Music',
-        level: 'Expert',
-        yearsExperience: 8,
-        verified: true,
-        verificationBadge: 'Concert Grade Mentor',
-        hourlyRateInr: 550,
-        hourlyRateCredits: 1.2,
-        proofCount: 28,
-      }
-    ],
-    skillsToLearn: [
-      {
-        skillId: 'skill-english',
-        skillName: 'Business English & Negotiations',
-        targetLevel: 'Expert',
-        urgency: 'urgent',
-        targetDateWeeks: 4,
-        currentRoadmapStep: 4,
-        totalRoadmapSteps: 6,
-        progressPercent: 66,
-      }
-    ],
-    badges: [
-      {
-        id: 'badge-4',
-        title: 'Virtuoso Mentor',
-        description: 'Maintained 4.9+ rating over 40 sessions',
-        icon: '🎸',
-        category: 'teaching',
-        unlockedAt: '2026-07-15',
-      }
-    ]
-  },
-  {
-    id: 'user-david',
-    name: 'David Kumar',
-    handle: '@david_talks',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    headline: 'Executive Speech Coach & Corporate Communications Lead',
-    bio: 'Helping founders and professionals communicate with authority. Learning Python to automate data workflows and analytics.',
-    location: 'London / Mumbai',
-    timezone: 'BST / IST',
-    college: 'LSE / BITS Pilani',
-    collegeVerified: true,
-    languages: ['English (Native)', 'Hindi (Fluent)'],
-    creditsBalance: 6.0,
-    totalCreditsEarned: 18.0,
-    totalCreditsSpent: 12.0,
-    teachingHours: 24,
-    learningHours: 16,
-    streakDays: 5,
-    xpPoints: 2600,
-    role: 'user',
-    trustScore: {
-      identityVerified: true,
-      skillVerifiedCount: 3,
-      completedSessions: 22,
-      attendanceRate: 96,
-      averageRating: 4.92,
-      cancellationRate: 4,
-      responseRate: 95,
-      accountAgeMonths: 9,
-      overallScore: 94,
-    },
-    skillsToTeach: [
-      {
-        skillId: 'skill-english',
-        skillName: 'Business English & Negotiations',
-        category: 'Languages',
-        level: 'Expert',
-        yearsExperience: 10,
-        verified: true,
-        verificationBadge: 'Executive Coach',
-        hourlyRateInr: 600,
-        hourlyRateCredits: 1.5,
-        proofCount: 22,
-      },
-      {
-        skillId: 'skill-public-speaking',
-        skillName: 'Debate & Public Speaking',
-        category: 'Soft Skills',
-        level: 'Expert',
-        yearsExperience: 8,
-        verified: true,
-        verificationBadge: 'Master Orator',
-        hourlyRateInr: 650,
-        hourlyRateCredits: 1.6,
-        proofCount: 16,
-      }
-    ],
-    skillsToLearn: [
-      {
-        skillId: 'skill-python',
-        skillName: 'Python for Data Science',
-        targetLevel: 'Intermediate',
-        urgency: 'career_switch',
-        targetDateWeeks: 8,
-        currentRoadmapStep: 2,
-        totalRoadmapSteps: 8,
-        progressPercent: 25,
-      }
-    ],
-    badges: [
-      {
-        id: 'badge-5',
-        title: 'Bridge Builder',
-        description: 'Helped 20+ learners transition careers',
-        icon: '🌉',
-        category: 'community',
-        unlockedAt: '2026-08-01',
-      }
-    ]
-  },
-  {
-    id: 'user-liam',
-    name: 'Liam Vance',
-    handle: '@liam_shaders',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    headline: 'Creative Technologist & WebGL/GLSL Shader Specialist',
-    bio: 'Rare skill instructor. Generating dynamic 3D generative graphics. Seeking UI/UX Figma design systems mentorship.',
-    location: 'Berlin, Germany',
-    timezone: 'CET (UTC+1)',
-    college: 'TU Berlin',
-    collegeVerified: true,
-    languages: ['English (Fluent)', 'German (Native)'],
-    creditsBalance: 24.5,
-    totalCreditsEarned: 68.0,
-    totalCreditsSpent: 43.5,
-    teachingHours: 52,
-    learningHours: 35,
-    streakDays: 19,
-    xpPoints: 6900,
-    role: 'user',
-    trustScore: {
-      identityVerified: true,
-      skillVerifiedCount: 4,
-      completedSessions: 55,
-      attendanceRate: 100,
-      averageRating: 5.0,
-      cancellationRate: 0,
-      responseRate: 100,
-      accountAgeMonths: 22,
-      overallScore: 99,
-    },
-    skillsToTeach: [
-      {
-        skillId: 'skill-glsl',
-        skillName: 'Advanced GLSL & WebGL Shaders',
-        category: 'Programming',
-        level: 'Expert',
-        yearsExperience: 7,
-        verified: true,
-        verificationBadge: 'Rare Skill Authority (2.8x Value)',
-        hourlyRateInr: 1200,
-        hourlyRateCredits: 2.8,
-        proofCount: 38,
-      }
-    ],
-    skillsToLearn: [
-      {
-        skillId: 'skill-uiux',
-        skillName: 'UI/UX Design Systems & Figma',
-        targetLevel: 'Advanced',
-        urgency: 'urgent',
-        targetDateWeeks: 4,
-        currentRoadmapStep: 3,
-        totalRoadmapSteps: 6,
-        progressPercent: 50,
-      }
-    ],
-    badges: [
-      {
-        id: 'badge-6',
-        title: 'Rare Market Kingpin',
-        description: 'Earned over 50 credits in high-multiplier rare skill tier',
-        icon: '💎',
-        category: 'teaching',
-        unlockedAt: '2026-06-20',
-      }
-    ]
-  },
-  {
-    id: 'user-priya',
-    name: 'Priya Sharma',
-    handle: '@priya_designs',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    headline: 'Lead Product Designer & Figma Educator',
-    bio: 'Designing intuitive products for global SaaS. Heading to Tokyo for design residency, need fast conversational Japanese!',
-    location: 'Bengaluru, India',
-    timezone: 'IST (UTC+5:30)',
-    college: 'NID Ahmedabad',
-    collegeVerified: true,
-    languages: ['English (Fluent)', 'Hindi (Native)'],
-    creditsBalance: 9.0,
-    totalCreditsEarned: 31.0,
-    totalCreditsSpent: 22.0,
-    teachingHours: 38,
-    learningHours: 26,
-    streakDays: 11,
-    xpPoints: 3900,
-    role: 'user',
-    trustScore: {
-      identityVerified: true,
-      skillVerifiedCount: 3,
-      completedSessions: 34,
-      attendanceRate: 97,
-      averageRating: 4.96,
-      cancellationRate: 2,
-      responseRate: 98,
-      accountAgeMonths: 16,
-      overallScore: 97,
-    },
-    skillsToTeach: [
-      {
-        skillId: 'skill-uiux',
-        skillName: 'UI/UX Design Systems & Figma',
-        category: 'Design & Creative',
-        level: 'Expert',
-        yearsExperience: 5,
-        verified: true,
-        verificationBadge: 'Design Master',
-        hourlyRateInr: 450,
-        hourlyRateCredits: 1.3,
-        proofCount: 26,
-      }
-    ],
-    skillsToLearn: [
-      {
-        skillId: 'skill-japanese',
-        skillName: 'Conversational Japanese (N4/N3)',
-        targetLevel: 'Intermediate',
-        urgency: 'exam_prep',
-        targetDateWeeks: 6,
-        currentRoadmapStep: 2,
-        totalRoadmapSteps: 8,
-        progressPercent: 25,
-      }
-    ],
-    badges: [
-      {
-        id: 'badge-7',
-        title: 'Bounty Hunter',
-        description: 'Posted and resolved reverse marketplace skill bounties',
-        icon: '🎯',
-        category: 'community',
-        unlockedAt: '2026-08-05',
-      }
-    ]
-  },
-  {
-    id: 'user-admin',
-    name: 'Admin Sentinel',
-    handle: '@admin_ops',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-    headline: 'Platform Master Controller & Trust Officer',
-    bio: 'Platform oversight, dispute resolution, skill economy calibration, and institutional verifications.',
-    location: 'HQ Global',
-    timezone: 'UTC',
-    collegeVerified: true,
-    languages: ['All Languages'],
-    creditsBalance: 9999,
-    totalCreditsEarned: 9999,
-    totalCreditsSpent: 0,
-    teachingHours: 500,
-    learningHours: 500,
-    streakDays: 365,
-    xpPoints: 99999,
-    role: 'admin',
-    trustScore: {
-      identityVerified: true,
-      skillVerifiedCount: 10,
-      completedSessions: 500,
-      attendanceRate: 100,
-      averageRating: 5.0,
-      cancellationRate: 0,
-      responseRate: 100,
-      accountAgeMonths: 36,
-      overallScore: 100,
-    },
-    skillsToTeach: [],
-    skillsToLearn: [],
-    badges: []
-  }
-];
-
-// 60.1 SKILL CHAIN DEMO (Alex -> Maya -> David -> Alex)
-export const SEED_SKILL_CHAINS: SkillChain[] = [
-  {
-    id: 'chain-001',
-    name: 'Python-Guitar-English Triad Cycle',
-    status: 'proposed',
-    totalParticipants: 3,
-    efficiencyScore: 98,
-    estimatedCompletionWeeks: 4,
-    isFutureChain: false,
-    nodes: [
-      {
-        userId: 'user-alex',
-        userName: 'Alex Rivera',
-        userAvatar: USERS[0].avatar,
-        teachesSkill: 'Python for Data Science',
-        learnsSkill: 'Acoustic Guitar & Fingerstyle',
-        nextUserId: 'user-maya',
-        sessionDurationMins: 60,
-      },
-      {
-        userId: 'user-maya',
-        userName: 'Maya Chen',
-        userAvatar: USERS[1].avatar,
-        teachesSkill: 'Acoustic Guitar & Fingerstyle',
-        learnsSkill: 'Business English & Negotiations',
-        nextUserId: 'user-david',
-        sessionDurationMins: 60,
-      },
-      {
-        userId: 'user-david',
-        userName: 'David Kumar',
-        userAvatar: USERS[2].avatar,
-        teachesSkill: 'Business English & Negotiations',
-        learnsSkill: 'Python for Data Science',
-        nextUserId: 'user-alex',
-        sessionDurationMins: 60,
-      }
-    ]
-  },
-  {
-    id: 'chain-future-002',
-    name: 'Shader & UI/UX Time-Deferred Cycle',
-    status: 'detecting',
-    totalParticipants: 3,
-    efficiencyScore: 94,
-    estimatedCompletionWeeks: 8,
-    isFutureChain: true,
-    maturityDate: '2026-09-30',
-    daysRemaining: 39,
-    nodes: [
-      {
-        userId: 'user-priya',
-        userName: 'Priya Sharma',
-        userAvatar: USERS[4].avatar,
-        teachesSkill: 'UI/UX Design Systems & Figma',
-        learnsSkill: 'Conversational Japanese (N4/N3)',
-        nextUserId: 'user-liam',
-        sessionDurationMins: 60,
-      },
-      {
-        userId: 'user-liam',
-        userName: 'Liam Vance',
-        userAvatar: USERS[3].avatar,
-        teachesSkill: 'Advanced GLSL & WebGL Shaders',
-        learnsSkill: 'UI/UX Design Systems & Figma',
-        nextUserId: 'user-priya',
-        sessionDurationMins: 60,
-      }
-    ]
-  }
-];
-
-// 60.1 FUTURE COMMITMENTS
-export const SEED_FUTURE_COMMITMENTS: FutureCommitment[] = [
-  {
-    id: 'fut-01',
-    userId: 'user-alex',
-    userName: 'Alex Rivera',
-    userAvatar: USERS[0].avatar,
-    skillCurrentlyLearning: 'Acoustic Guitar & Fingerstyle',
-    skillCommittedToTeach: 'Python for Data Science',
-    commitmentDate: '2026-08-22',
-    maturityDays: 45,
-    targetPrerequisiteLevel: 'Intermediate',
-    status: 'pending_learning',
-  },
-  {
-    id: 'fut-02',
-    userId: 'user-priya',
-    userName: 'Priya Sharma',
-    userAvatar: USERS[4].avatar,
-    skillCurrentlyLearning: 'Conversational Japanese',
-    skillCommittedToTeach: 'Advanced UI/UX Micro-Interactions',
-    commitmentDate: '2026-08-15',
-    maturityDays: 30,
-    targetPrerequisiteLevel: 'Intermediate',
-    status: 'pending_learning',
-  }
-];
-
-// 60.2 TRANSCRIPT PROOFS & AUTO MICRO-QUIZZES
-export const SEED_TRANSCRIPT_PROOFS: SessionTranscriptProof[] = [
-  {
-    id: 'proof-101',
-    sessionId: 'sess-8821',
-    learnerId: 'user-alex',
-    learnerName: 'Alex Rivera',
-    teacherId: 'user-maya',
-    teacherName: 'Maya Chen',
-    skillName: 'Acoustic Guitar & Fingerstyle',
-    date: '2026-08-20',
-    sessionSummaryNotes: 'Mastered Travis picking pattern, thumb independence on bass strings 6, 5, 4, and alternating syncopation over C-Am-F-G chord progression.',
-    conceptsTaught: ['Travis Picking Pattern', 'Bass String Alternation', 'Chord Transition Under 200ms'],
-    isVerified: true,
-    learnerScore: 3,
-    masteryPercentage: 100,
-    verificationBadgeUrl: 'https://skill-verify.crypto/cert/8821',
-    quizQuestions: [
-      {
-        id: 'q1',
-        question: 'Which digit is responsible for maintaining the steady root-fifth alternating bass line in standard Travis picking?',
-        options: ['Thumb (P)', 'Index finger (I)', 'Middle finger (M)', 'Ring finger (A)'],
-        correctOptionIndex: 0,
-        conceptTested: 'Bass String Alternation',
-      },
-      {
-        id: 'q2',
-        question: 'When transitioning from C major to A minor in the practiced progression, which finger remains anchored as a pivot?',
-        options: ['Index finger on 2nd string (B)', 'Ring finger on 5th string (A)', 'Middle finger on 4th string (D)', 'Pinky on 1st string (E)'],
-        correctOptionIndex: 0,
-        conceptTested: 'Chord Transition Under 200ms',
-      },
-      {
-        id: 'q3',
-        question: 'What is the timing subdivision used for the syncopated treble pluck in bar 3 of the assigned exercise?',
-        options: ['On the "and" of beat 2', 'Exactly on beat 1', 'On beat 4 triplet', 'Grace note on beat 3'],
-        correctOptionIndex: 0,
-        conceptTested: 'Travis Picking Pattern',
-      }
-    ]
-  },
-  {
-    id: 'proof-102',
-    sessionId: 'sess-8822',
-    learnerId: 'user-david',
-    learnerName: 'David Kumar',
-    teacherId: 'user-alex',
-    teacherName: 'Alex Rivera',
-    skillName: 'Python for Data Science',
-    date: '2026-08-19',
-    sessionSummaryNotes: 'Vectorized DataFrame transformations using Pandas `.apply()` vs `.map()`, handling missing NaN values with forward fill, and groupby aggregations.',
-    conceptsTaught: ['Pandas Vectorization', 'GroupBy Multi-Aggregation', 'Missing Data Imputation'],
-    isVerified: true,
-    learnerScore: 3,
-    masteryPercentage: 96,
-    quizQuestions: [
-      {
-        id: 'q1',
-        question: 'Why is NumPy/Pandas vectorized column arithmetic substantially faster than looping over `.iterrows()`?',
-        options: ['C-level contiguous memory execution without Python GIL overhead', 'It runs only on GPU shaders', 'It compresses the strings automatically', 'It ignores float rounding'],
-        correctOptionIndex: 0,
-        conceptTested: 'Pandas Vectorization',
-      },
-      {
-        id: 'q2',
-        question: 'Which method efficiently computes both the mean and standard deviation of revenue per user group in one pass?',
-        options: ['df.groupby("user_id")["revenue"].agg(["mean", "std"])', 'df.loop_groups(mean, std)', 'df.sum_all().split()', 'df.describe_fast()'],
-        correctOptionIndex: 0,
-        conceptTested: 'GroupBy Multi-Aggregation',
-      },
-      {
-        id: 'q3',
-        question: 'What does `df.ffill()` specifically execute on a missing time-series entry?',
-        options: ['Propagates the last valid non-null observation forward', 'Fills with zero', 'Deletes the entire column', 'Interpolates using cubic spline'],
-        correctOptionIndex: 0,
-        conceptTested: 'Missing Data Imputation',
-      }
-    ]
-  }
-];
-
-// 60.3 DYNAMIC SKILL RATES & VALUE INDEX
+export const CHAINS: SkillChain[] = [];
+export const SEED_SKILL_CHAINS: SkillChain[] = [];
+export const INITIAL_COMMITMENTS: FutureCommitment[] = [];
+export const SEED_FUTURE_COMMITMENTS: FutureCommitment[] = [];
+export const TRANSCRIPT_PROOFS: SessionTranscriptProof[] = [];
+export const SEED_TRANSCRIPT_PROOFS: SessionTranscriptProof[] = [];
 export const DYNAMIC_RATES: DynamicSkillRate[] = [
   {
-    skillId: 'skill-glsl',
-    skillName: 'Advanced GLSL & WebGL Shaders',
+    skillId: 'skill-python',
+    skillName: 'Python & AI Engineering',
     category: 'Programming',
     supplyCount: 4,
-    demandCount: 89,
-    multiplier: 2.8,
-    creditPerHour: 2.8,
-    inrPerHour: 1200,
-    trend: 'up',
-    change24h: 14.5,
-    tier: 'High Demand & Rare',
-  },
-  {
-    skillId: 'skill-japanese',
-    skillName: 'Conversational Japanese (N4/N3)',
-    category: 'Languages',
-    supplyCount: 8,
-    demandCount: 74,
-    multiplier: 1.9,
-    creditPerHour: 1.9,
-    inrPerHour: 650,
-    trend: 'up',
-    change24h: 8.2,
-    tier: 'High Demand & Rare',
-  },
-  {
-    skillId: 'skill-public-speaking',
-    skillName: 'Debate & Public Speaking',
-    category: 'Soft Skills',
-    supplyCount: 14,
-    demandCount: 63,
-    multiplier: 1.5,
-    creditPerHour: 1.5,
-    inrPerHour: 500,
-    trend: 'stable',
-    change24h: 1.2,
-    tier: 'Balanced Growth',
-  },
-  {
-    skillId: 'skill-python',
-    skillName: 'Python for Data Science',
-    category: 'Programming',
-    supplyCount: 42,
-    demandCount: 128,
+    demandCount: 28,
     multiplier: 1.4,
     creditPerHour: 1.4,
     inrPerHour: 450,
     trend: 'up',
-    change24h: 3.8,
-    tier: 'Balanced Growth',
-  },
-  {
-    skillId: 'skill-uiux',
-    skillName: 'UI/UX Design Systems & Figma',
-    category: 'Design',
-    supplyCount: 40,
-    demandCount: 88,
-    multiplier: 1.3,
-    creditPerHour: 1.3,
-    inrPerHour: 450,
-    trend: 'stable',
-    change24h: -0.5,
-    tier: 'Balanced Growth',
+    change24h: 8.5,
+    tier: 'High Demand & Rare',
   },
   {
     skillId: 'skill-react',
     skillName: 'React & Next.js Fullstack',
     category: 'Programming',
-    supplyCount: 58,
-    demandCount: 110,
+    supplyCount: 8,
+    demandCount: 22,
     multiplier: 1.2,
     creditPerHour: 1.2,
     inrPerHour: 400,
-    trend: 'down',
-    change24h: -2.1,
+    trend: 'up',
+    change24h: 4.2,
     tier: 'Balanced Growth',
-  },
-  {
-    skillId: 'skill-english',
-    skillName: 'Business English & Negotiations',
-    category: 'Languages',
-    supplyCount: 62,
-    demandCount: 95,
-    multiplier: 1.1,
-    creditPerHour: 1.1,
-    inrPerHour: 350,
-    trend: 'stable',
-    change24h: 0.0,
-    tier: 'Oversupplied Base',
   },
   {
     skillId: 'skill-guitar',
     skillName: 'Acoustic Guitar & Fingerstyle',
-    category: 'Music',
-    supplyCount: 35,
-    demandCount: 42,
+    category: 'Arts & Music',
+    supplyCount: 6,
+    demandCount: 6,
     multiplier: 1.0,
     creditPerHour: 1.0,
     inrPerHour: 300,
     trend: 'stable',
     change24h: 0.0,
-    tier: 'Oversupplied Base',
-  }
+    tier: 'Balanced Growth',
+  },
 ];
 
-// 60.5 SKILL BOUNTIES (Reverse Marketplace)
-export const SEED_BOUNTIES: SkillBounty[] = [
-  {
-    id: 'bounty-301',
-    learnerId: 'user-priya',
-    learnerName: 'Priya Sharma',
-    learnerAvatar: USERS[4].avatar,
-    skillName: 'Conversational Japanese (N4/N3)',
-    category: 'Languages',
-    title: 'Urgent: Conversational Japanese for Tokyo Design Residency (6 Weeks)',
-    description: 'Need intensive 1-on-1 speaking drill twice a week focused on design studio etiquette, daily Tokyo commute vocabulary, and polite Keigo nuances.',
-    targetLevel: 'Intermediate',
-    budgetCredits: 18,
-    budgetInr: 5000,
-    deadlineWeeks: 6,
-    bidsCount: 3,
-    status: 'open',
-    createdAt: '2026-08-21',
-    bids: [
-      {
-        id: 'bid-1',
-        teacherId: 'user-tanaka',
-        teacherName: 'Kenji Tanaka',
-        teacherAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        teacherRating: 4.97,
-        trustScore: 98,
-        proposedCurriculum: '12 tailored 45-min immersion sessions with real Tokyo subway maps, studio scenario roleplays, and AI voice feedback homework.',
-        estimatedSessions: 12,
-        bidPriceCredits: 16,
-        bidPriceInr: 4600,
-        createdAt: '2026-08-21 14:30',
-      }
-    ]
-  },
-  {
-    id: 'bounty-302',
-    learnerId: 'user-david',
-    learnerName: 'David Kumar',
-    learnerAvatar: USERS[2].avatar,
-    skillName: 'Python for Data Science',
-    category: 'Programming',
-    title: 'Automate Corporate Executive KPI Dashboards with Streamlit & Pandas',
-    description: 'Looking for a senior Python dev to mentor me through writing clean data extraction pipelines from SQL/CSV and building a live Streamlit dashboard in 4 weeks.',
-    targetLevel: 'Intermediate',
-    budgetCredits: 12,
-    budgetInr: 3500,
-    deadlineWeeks: 4,
-    bidsCount: 5,
-    status: 'open',
-    createdAt: '2026-08-20',
-    bids: [
-      {
-        id: 'bid-2',
-        teacherId: 'user-alex',
-        teacherName: 'Alex Rivera',
-        teacherAvatar: USERS[0].avatar,
-        teacherRating: 4.95,
-        trustScore: 96,
-        proposedCurriculum: '8 intensive sessions covering Pandas vectorization, caching with Streamlit, Plotly charts, and local deployment.',
-        estimatedSessions: 8,
-        bidPriceCredits: 11,
-        bidPriceInr: 3200,
-        createdAt: '2026-08-21 09:15',
-      }
-    ]
-  }
-];
-
-// 60.6 CROSS-SKILL FUSION SESSIONS
-export const SEED_FUSION_OPTIONS: FusionSessionOption[] = [
-  {
-    id: 'fuse-01',
-    title: 'Bilingual Culinary & Conversational Spanish',
-    primarySkill: 'Conversational Spanish',
-    secondarySkill: 'Authentic Tapas & Paella Cooking',
-    categoryCombo: 'Language + Culinary Arts',
-    compatibilityScore: 97,
-    suggestedSplitMins: '30m Kitchen Vocab & Prep + 30m Freeflow Dining Chat',
-    rationale: 'Active sensorimotor cooking context dramatically enhances linguistic vocabulary retention by 3.2x compared to textbook memorization.',
-    idealFor: 'Learners seeking conversational fluency while mastering a cultural craft.',
-  },
-  {
-    id: 'fuse-02',
-    title: 'Generative Code & Ambient Sound Synthesis',
-    primarySkill: 'Three.js & GLSL Shaders',
-    secondarySkill: 'Modular Audio Synthesis & Beats',
-    categoryCombo: 'Creative Tech + Electronic Music',
-    compatibilityScore: 94,
-    suggestedSplitMins: '30m Fast Fourier Transform Audio Visualizer Code + 30m Synth Patching',
-    rationale: 'Real-time shader math directly couples with audio frequencies, turning math formulas into reactive audiovisual artwork.',
-    idealFor: 'Creative coders, music producers, and interactive digital artists.',
-  },
-  {
-    id: 'fuse-03',
-    title: 'Executive Rhetoric & Vocal Resonance Mechanics',
-    primarySkill: 'Persuasive Speech Structuring',
-    secondarySkill: 'Diaphragmatic Breath & Vocal Projection',
-    categoryCombo: 'Public Speaking + Vocal Training',
-    compatibilityScore: 96,
-    suggestedSplitMins: '25m Pitch Deck Structure + 35m Live Vocal Resonance Drills',
-    rationale: 'Content delivery is 60% tonal authority; combining scriptwriting with singing breath control produces immediate executive presence.',
-    idealFor: 'Startup founders, debaters, and keynoters.',
-  }
-];
-
-// 60.7 PREDICTIVE FUTURE MATCHES
-export const SEED_PREDICTIVE_MATCHES: PredictiveMatch[] = [
-  {
-    id: 'pred-01',
-    targetTeacher: USERS[1], // Maya
-    skillTrack: 'Acoustic Guitar Fingerstyle Mastery',
-    prerequisiteRoadmapWeek: 4,
-    projectedMatchScore: 96,
-    estimatedTimeToUnlockWeeks: 2,
-    aiPredictionReason: 'You are currently 75% through Week 3 (Barre Chords). Once you complete Week 4 Travis picking drills, Maya’s intermediate fingerstyle repertoire becomes an optimal 96% match.',
-  },
-  {
-    id: 'pred-02',
-    targetTeacher: USERS[3], // Liam
-    skillTrack: 'Interactive 3D Web & GLSL Shaders',
-    prerequisiteRoadmapWeek: 5,
-    projectedMatchScore: 92,
-    estimatedTimeToUnlockWeeks: 3,
-    aiPredictionReason: 'Your progress in React Three Fiber (Module 2) is accelerating. By Week 5, your linear algebra foundation will unlock Liam’s custom raymarching shader lab.',
-  }
-];
-
-// 60.8 SECOND-BRAIN AUTO NOTEBOOK
-export const SEED_NOTEBOOK_ENTRIES: NotebookEntry[] = [
-  {
-    id: 'nb-001',
-    sessionId: 'sess-8821',
-    date: '2026-08-20',
-    skillCategory: 'Music',
-    skillName: 'Acoustic Guitar & Fingerstyle',
-    teacherName: 'Maya Chen',
-    title: 'Mastering Travis Picking & Thumb Independence',
-    summary: 'Acoustic fingerstyle breakthrough: isolating the thumb to play steady quarter-note bass while syncopating the index and middle fingers on the higher strings.',
-    keyTakeaways: [
-      'Thumb handles strings 6, 5, 4 strictly on downbeats (1, 2, 3, 4).',
-      'Index finger handles 3rd string (G), Middle handles 2nd string (B), Ring handles 1st string (E).',
-      'Pinch technique: pluck bass and melody string simultaneously on beat 1 for emphatic phrasing.'
-    ],
-    actionItems: [
-      'Practice 10 minutes daily with metronome at 72 BPM using C -> Am -> Em progression.',
-      'Record 30-second audio snippet and submit to AI Practice Coach for rhythm stability check.'
-    ],
-    tags: ['Guitar', 'Travis Picking', 'Fingerstyle', 'Metronome', 'Maya Chen']
-  },
-  {
-    id: 'nb-002',
-    sessionId: 'sess-8822',
-    date: '2026-08-19',
-    skillCategory: 'Programming',
-    skillName: 'Python for Data Science',
-    teacherName: 'Alex Rivera',
-    title: 'Vectorized Data Processing & GroupBy Aggregations',
-    summary: 'Detailed deep-dive into high-performance Pandas. Never iterate over rows when vectorization or C-compiled Cython aggregations can do it in milliseconds.',
-    keyTakeaways: [
-      'Use `df["col"].values` for zero-overhead NumPy array operations.',
-      'Multi-aggregations with `.agg({"rev": ["mean", "sum"], "users": "count"})` avoid multiple passes.',
-      'Use `.query()` syntax for readable memory-efficient subset slicing.'
-    ],
-    codeSnippets: [
-      {
-        title: 'Optimized Multi-Metric Aggregation',
-        language: 'python',
-        code: `import pandas as pd\nimport numpy as np\n\n# Efficient group summary\nsummary_df = df.groupby(['country', 'subscription_tier']).agg({\n    'monthly_spend': ['mean', 'median', 'std'],\n    'session_duration_mins': lambda x: np.percentile(x, 90)\n}).reset_index()`
-      }
-    ],
-    actionItems: [
-      'Refactor slow for-loop in financial ETL script to use vectorized `.apply()` or NumPy conditional masks.',
-      'Take AI Micro-Quiz #102 to cement Pandas vector memory model.'
-    ],
-    tags: ['Python', 'Pandas', 'Data Science', 'Performance', 'Alex Rivera']
-  }
-];
-
-// 60.9 TEACH-VERIFIED CREDENTIAL CHAIN (Ledger Blocks)
-export const SEED_CREDENTIAL_LEDGER: CredentialBlock[] = [
-  {
-    blockIndex: 0,
-    certificateId: 'GENESIS-BLOCK-0000',
-    learnerName: 'Protocol Seed',
-    learnerId: 'system',
-    teacherName: 'AI Skill Exchange Network',
-    teacherId: 'system',
-    skillName: 'Decentralized Peer Skill Verification Protocol v2',
-    levelEarned: 'Expert',
-    sessionCount: 0,
-    quizScorePct: 100,
-    timestamp: '2026-01-01T00:00:00Z',
-    previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
-    blockHash: '0000a4b89c7d1e3f89a2b4c5d6e7f80123456789abcdef0123456789abcdef01',
-    digitalSignature: 'SIG_ECDSA_GENESIS_ROOT_AUTHORIZED',
-    verificationUrl: 'https://verify.skillexchange.org/cert/GENESIS',
-    status: 'immutable_verified',
-  },
-  {
-    blockIndex: 1,
-    certificateId: 'CERT-2026-8821-GUITAR',
-    learnerName: 'Alex Rivera',
-    learnerId: 'user-alex',
-    teacherName: 'Maya Chen',
-    teacherId: 'user-maya',
-    skillName: 'Acoustic Fingerstyle & Travis Picking',
-    levelEarned: 'Intermediate',
-    sessionCount: 4,
-    quizScorePct: 100,
-    timestamp: '2026-08-20T18:45:12Z',
-    previousHash: '0000a4b89c7d1e3f89a2b4c5d6e7f80123456789abcdef0123456789abcdef01',
-    blockHash: '6f8a29b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90123456789abcdef458921a7',
-    digitalSignature: 'SIG_MAYA_CHEN_0x892bf37a1c904e2d_VERIFIED_BY_TRANSCRIPT_AI',
-    verificationUrl: 'https://verify.skillexchange.org/cert/CERT-2026-8821-GUITAR',
-    status: 'immutable_verified',
-  },
-  {
-    blockIndex: 2,
-    certificateId: 'CERT-2026-8822-PYTHON',
-    learnerName: 'David Kumar',
-    learnerId: 'user-david',
-    teacherName: 'Alex Rivera',
-    teacherId: 'user-alex',
-    skillName: 'Vectorized Python & Pandas Analytics',
-    levelEarned: 'Intermediate',
-    sessionCount: 3,
-    quizScorePct: 96,
-    timestamp: '2026-08-19T20:10:05Z',
-    previousHash: '6f8a29b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90123456789abcdef458921a7',
-    blockHash: '9c3b7a1d5e9f8240a6b1c2d3e4f5a6b7c8d9e0f123456789abcdef0123456789',
-    digitalSignature: 'SIG_ALEX_RIVERA_0x37a90f14ec82bd_VERIFIED_BY_TRANSCRIPT_AI',
-    verificationUrl: 'https://verify.skillexchange.org/cert/CERT-2026-8822-PYTHON',
-    status: 'immutable_verified',
-  }
-];
+export const INITIAL_BOUNTIES: SkillBounty[] = [];
+export const SEED_BOUNTIES: SkillBounty[] = [];
+export const FUSION_OPTIONS: FusionSessionOption[] = [];
+export const SEED_FUSION_OPTIONS: FusionSessionOption[] = [];
+export const PREDICTIVE_MATCHES: PredictiveMatch[] = [];
+export const SEED_PREDICTIVE_MATCHES: PredictiveMatch[] = [];
+export const INITIAL_NOTEBOOK_ENTRIES: NotebookEntry[] = [];
+export const SEED_NOTEBOOK_ENTRIES: NotebookEntry[] = [];
+export const INITIAL_CREDENTIALS: CredentialBlock[] = [];
+export const SEED_CREDENTIAL_LEDGER: CredentialBlock[] = [];

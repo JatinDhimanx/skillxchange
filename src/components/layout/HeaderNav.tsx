@@ -363,38 +363,47 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
                 </button>
 
                 {showPersonaDropdown && (
-                  <div className="absolute right-0 mt-2 w-64 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 space-y-1 animate-slide-down">
-                    <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
-                      <span className="text-[10px] font-mono-ledger font-bold uppercase tracking-wider text-slate-400">Switch Persona</span>
+                  <div className="absolute right-0 mt-2 w-64 p-3 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 space-y-2 animate-slide-down">
+                    <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
+                      <img src={currentUser.avatar} alt={currentUser.name} className="w-10 h-10 rounded-full object-cover shrink-0 border border-slate-200" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 text-xs truncate">{currentUser.name}</p>
+                        <p className="text-[10px] text-slate-500 font-mono-ledger truncate">{currentUser.handle}</p>
+                        <span className="inline-flex text-[9px] font-mono-ledger font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 mt-1">
+                          {currentUser.creditsBalance.toFixed(1)} Barter Credits
+                        </span>
+                      </div>
                     </div>
-                    {allUsers.filter(u => u.role !== 'admin').map(user => (
-                      <button
-                        key={user.id}
-                        onClick={() => { switchUser(user.id); setShowPersonaDropdown(false); }}
-                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all text-xs ${
-                          currentUser.id === user.id ? 'bg-slate-100 text-slate-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full object-cover shrink-0" />
-                          <div className="min-w-0">
-                            <p className="font-bold text-slate-900 truncate">{user.name}</p>
-                            <p className="text-[10px] text-slate-500 truncate">Teaches: {user.skillsToTeach[0]?.skillName.split(' ')[0]}</p>
-                          </div>
-                        </div>
-                        {currentUser.id === user.id && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
-                      </button>
-                    ))}
+
+                    {allUsers.length > 1 && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-mono-ledger font-bold uppercase tracking-wider text-slate-400 px-1">Other Peers in Network</span>
+                        {allUsers.filter(u => u.id !== currentUser.id && u.role !== 'admin').slice(0, 3).map(user => (
+                          <button
+                            key={user.id}
+                            onClick={() => { switchUser(user.id); setShowPersonaDropdown(false); }}
+                            className="w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-all text-xs hover:bg-slate-50 text-slate-700"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <img src={user.avatar} alt={user.name} className="w-6 h-6 rounded-full object-cover shrink-0" />
+                              <p className="font-semibold text-slate-800 text-xs truncate">{user.name}</p>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono-ledger">Switch</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="pt-2 border-t border-slate-100 space-y-1">
                       <button
                         onClick={() => handleTabClick('profile')}
-                        className="w-full py-1.5 px-3 rounded-xl text-center font-bold text-xs text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors"
+                        className="w-full py-1.5 px-3 rounded-xl text-center font-bold text-xs text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
                       >
                         View Full Profile
                       </button>
                       <button
                         onClick={() => { logoutUser(); setShowPersonaDropdown(false); }}
-                        className="w-full py-1.5 px-3 rounded-xl text-center font-bold text-xs text-rose-600 hover:bg-rose-50 flex items-center justify-center gap-1.5 transition-colors"
+                        className="w-full py-1.5 px-3 rounded-xl text-center font-bold text-xs text-rose-600 hover:bg-rose-50 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                       >
                         <LogOut className="w-3.5 h-3.5" />
                         Sign Out

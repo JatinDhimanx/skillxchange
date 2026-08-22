@@ -25,6 +25,7 @@ import {
   Coins,
   Repeat,
   Compass,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { isSupabaseConfigured } from '../../lib/supabase/client';
@@ -67,7 +68,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   initialTab = 'signin',
 }) => {
-  const { loginUser, registerUser, allUsers, showToast } = useApp();
+  const { loginUser, registerUser, resendVerification, showToast } = useApp();
   const [tab, setTab] = useState<'signin' | 'signup' | 'forgot'>(initialTab);
 
   // Sign In Form State
@@ -88,6 +89,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [learnSkill, setLearnSkill] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(PRESET_AVATARS[0]);
 
+  // Email Verification Screen State
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [resendingEmail, setResendingEmail] = useState(false);
+
   // Forgot password states
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoverySent, setRecoverySent] = useState(false);
@@ -99,9 +105,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     setTab(initialTab);
     setErrorMsg(null);
-    setSignUpStep(1);
-    setRecoverySent(false);
-    setSuccessCelebration(false);
+    setEmailVerificationSent(false);
   }, [initialTab, isOpen]);
 
   // Escape key listener
@@ -118,25 +122,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Password strength calculation
   const getPasswordStrength = (pass: string) => {
-    if (!pass) return { score: 0, label: 'None', color: 'bg-slate-200' };
-    let score = 0;
-    if (pass.length >= 6) score += 1;
-    if (pass.length >= 8) score += 1;
-    if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score += 1;
-    if (/[0-9]/.test(pass) || /[^A-Za-z0-9]/.test(pass)) score += 1;
+    if (!pass) return { score: 0, label: 'Empty', color: 'bg-slate-200' };
+    let s = 0;
+    if (pass.length >= 6) s++;
+    if (pass.length >= 8) s++;
+    if (/[A-Z]/.test(pass)) s++;
+    if (/[0-9]/.test(pass)) s++;
+    if (/[^A-Za-z0-9]/.test(pass)) s++;
 
-    switch (score) {
-      case 1:
-        return { score: 25, label: 'Weak', color: 'bg-rose-500' };
-      case 2:
-        return { score: 50, label: 'Fair', color: 'bg-amber-500' };
-      case 3:
-        return { score: 75, label: 'Good', color: 'bg-blue-500' };
-      case 4:
-        return { score: 100, label: 'Strong', color: 'bg-emerald-500' };
-      default:
-        return { score: 20, label: 'Weak', color: 'bg-rose-500' };
-    }
+    if (s <= 2) return { score: s, label: 'Weak', color: 'bg-rose-500' };
+    if (s <= 4) return { score: s, label: 'Good', color: 'bg-amber-500' };
+    return { score: s, label: 'Strong', color: 'bg-emerald-500' };
   };
 
   const pwdStrength = getPasswordStrength(signUpPassword);
@@ -151,14 +147,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setErrorMsg(null);
     try {
-      const success = await loginUser(signInEmail, signInPassword);
-      if (success) {
+      const result = await loginUser(signInEmail, signInPassword);
+      if (result.success) {
         setSuccessCelebration(true);
         setTimeout(() => {
           onClose();
         }, 900);
       } else {
-        setErrorMsg('Invalid credentials. You can also pick a Demo Account below to test instantly!');
+        setErrorMsg(result.error || 'Invalid credentials. Please verify your email and password.');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to sign in.');
@@ -187,7 +183,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg(null);
     try {
       const cleanHandle = handle.trim() || fullName.toLowerCase().replace(/\s+/g, '');
-      const success = await registerUser({
+      const result = await registerUser({
         email: signUpEmail,
         password: signUpPassword,
         name: fullName,
@@ -198,19 +194,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         avatar: selectedAvatar,
       });
 
-      if (success) {
-        setSuccessCelebration(true);
-        setTimeout(() => {
-          onClose();
-        }, 1000);
+      if (result.success) {
+        if (result.needsEmailVerification) {
+          setRegisteredEmail(signUpEmail);
+          setEmailVerificationSent(true);
+        } else {
+          setSuccessCelebration(true);
+          setTimeout(() => {
+            onClose();
+          }, 1000);
+        }
       } else {
-        setErrorMsg('Registration failed. Please verify your details.');
+        setErrorMsg(result.error || 'Registration failed. Please verify your details.');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Registration error.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleResendVerification = async () => {
+    if (!registeredEmail) return;
+    setResendingEmail(true);
+    await resendVerification(registeredEmail);
+    setResendingEmail(false);
   };
 
   const handleRecoverySubmit = (e: React.FormEvent) => {
@@ -374,14 +382,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             )}
 
+            {/* Email Verification Screen */}
+            {emailVerificationSent && !successCelebration && (
+              <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 text-center my-2 space-y-4 animate-fade-in">
+                <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+                  <Mail className="w-8 h-8 animate-bounce" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-slate-900">Check Your Email to Activate</h4>
+                  <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto leading-relaxed">
+                    We've sent an activation link to <strong className="text-slate-900 font-mono-ledger">{registeredEmail}</strong>. Please check your inbox and click the link to confirm your account.
+                  </p>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed text-[11.5px]">
+                    After confirming via the email link, sign in with your credentials to unlock live study rooms, peer matching, and your 5.0 genesis barter credits!
+                  </p>
+                </div>
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendingEmail}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    {resendingEmail ? 'Sending...' : 'Resend Verification Link'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailVerificationSent(false);
+                      setTab('signin');
+                      setSignInEmail(registeredEmail);
+                    }}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer"
+                  >
+                    I Have Verified → Sign In
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ═══════════════════════════════════════════════════════════════ */}
             {/* 1. SIGN IN TAB */}
             {/* ═══════════════════════════════════════════════════════════════ */}
-            {!successCelebration && tab === 'signin' && (
+            {!successCelebration && !emailVerificationSent && tab === 'signin' && (
               <div>
                 <div className="mb-5">
                   <h3 className="text-xl font-bold text-slate-900 tracking-tight">Sign In to Your Account</h3>
-                  <p className="text-xs text-slate-500 mt-1">Access your peer exchanges, study rooms, and credit balance.</p>
+                  <p className="text-xs text-slate-500 mt-1">Enter your verified email and password to access your dashboard.</p>
                 </div>
 
                 <form onSubmit={handleSignInSubmit} className="space-y-4">
@@ -394,7 +444,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <input
                         type="email"
                         required
-                        placeholder="alex@skillexchange.org"
+                        placeholder="yourname@gmail.com"
                         value={signInEmail}
                         onChange={e => setSignInEmail(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
@@ -463,39 +513,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </button>
                 </form>
 
-                {/* Instant 1-Click Demo Accounts */}
-                <div className="mt-6 pt-5 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <p className="text-[10.5px] font-mono-ledger text-slate-400 uppercase font-bold">
-                      ⚡ 1-Click Demo Personas
-                    </p>
-                    <span className="text-[10px] text-amber-600 font-mono-ledger font-semibold">Instant Test</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {allUsers.slice(0, 4).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => fillDemoAccount(`${u.name.toLowerCase().split(' ')[0]}@skillexchange.org`)}
-                        className="p-2.5 rounded-2xl bg-slate-50 hover:bg-amber-50/70 border border-slate-200 hover:border-amber-300 text-left transition-all group flex items-center gap-2.5"
-                      >
-                        <img
-                          src={u.avatar}
-                          alt={u.name}
-                          className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-slate-800 truncate group-hover:text-amber-900">
-                            {u.name}
-                          </p>
-                          <p className="text-[9.5px] text-slate-500 truncate font-mono-ledger">
-                            {u.skillsToTeach[0]?.skillName || 'Mentor'}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                {/* Secure Authentication Badge */}
+                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono-ledger">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Supabase Auth & RLS Verified</span>
+                  </span>
+                  <span>SSL Encrypted</span>
                 </div>
               </div>
             )}
@@ -503,7 +527,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {/* ═══════════════════════════════════════════════════════════════ */}
             {/* 2. SIGN UP TAB (2-Step Flow) */}
             {/* ═══════════════════════════════════════════════════════════════ */}
-            {!successCelebration && tab === 'signup' && (
+            {!successCelebration && !emailVerificationSent && tab === 'signup' && (
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div>

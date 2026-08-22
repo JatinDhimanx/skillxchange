@@ -95,15 +95,31 @@ export const LiveSkillGraph: React.FC = () => {
       });
     });
 
-    // Edges
-    edges.push(
-      { source: 'user-alex', target: 'sk-py', label: 'Teaches', isChain: true, color: '#D97706' },
-      { source: 'sk-py', target: 'user-david', label: 'Learns', isChain: true, color: '#059669' },
-      { source: 'user-david', target: 'sk-en', label: 'Teaches', isChain: true, color: '#D97706' },
-      { source: 'sk-en', target: 'user-maya', label: 'Learns', isChain: true, color: '#059669' },
-      { source: 'user-maya', target: 'sk-gt', label: 'Teaches', isChain: true, color: '#D97706' },
-      { source: 'sk-gt', target: 'user-alex', label: 'Learns', isChain: true, color: '#059669' }
-    );
+    // Dynamic Edges based on registered users
+    if (allUsers.length > 0) {
+      allUsers.forEach((u, i) => {
+        const nextUser = allUsers[(i + 1) % allUsers.length];
+        const randomSkill = skillsList[i % skillsList.length];
+        if (randomSkill) {
+          edges.push({
+            source: u.id,
+            target: randomSkill.id,
+            label: 'Teaches',
+            isChain: true,
+            color: '#D97706',
+          });
+          if (nextUser && nextUser.id !== u.id) {
+            edges.push({
+              source: randomSkill.id,
+              target: nextUser.id,
+              label: 'Learns',
+              isChain: true,
+              color: '#059669',
+            });
+          }
+        }
+      });
+    }
 
     let animationFrameId: number;
     let tick = 0;
