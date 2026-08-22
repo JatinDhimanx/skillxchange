@@ -182,55 +182,31 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onNavigate
 
   return (
     <div className="py-6 max-w-[1240px] mx-auto px-4 sm:px-6 space-y-8 animate-fade-in font-sans">
-      {/* ── 1. HERO BANNER WITH USER LEVEL ───────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-slate-900 via-slate-800 to-emerald-950 text-white p-6 sm:p-10 border border-slate-700/60 shadow-xl">
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-3 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-mono-ledger font-bold border border-emerald-500/30">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              Level {userLevel} • {currentLevelTitle}
-            </div>
-            <h1 className="font-display font-black text-2xl sm:text-4xl lg:text-5xl tracking-tight text-white leading-tight">
-              {currentUser.name}&apos;s Progress
+      {/* ── Page Header ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between flex-wrap gap-4 pb-2 border-b border-slate-200/80">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="font-display font-bold text-2xl sm:text-3xl text-slate-900">
+              My Learning Dashboard
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 font-sans leading-relaxed">
-              Track skill milestones, verify real-time knowledge proofs, and manage your learning trajectory across the decentralized peer network.
-            </p>
-
-            {/* Level XP Bar in Hero */}
-            <div className="pt-2 max-w-md space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] font-mono-ledger">
-                <span className="text-emerald-300 font-bold">{xp.toLocaleString()} Total XP</span>
-                <span className="text-slate-400">{nextLevelXP - xp} XP to Level {userLevel + 1}</span>
-              </div>
-              <div className="h-2.5 bg-slate-800/90 rounded-full overflow-hidden border border-slate-700/80 p-0.5">
-                <div
-                  className="h-full bg-linear-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-700 shadow-xs"
-                  style={{ width: `${xpProgress}%` }}
-                />
-              </div>
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-mono-ledger font-bold border border-emerald-200">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              Level {userLevel} • {currentLevelTitle}
+            </span>
           </div>
-
-          <div className="flex items-center gap-3 shrink-0 flex-wrap">
-            <button
-              onClick={() => onNavigate('matches')}
-              className="px-6 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer font-sans"
-            >
-              <Compass className="w-4 h-4" /> Find Peer Matches
-            </button>
-            <button
-              onClick={() => onNavigate('wallet')}
-              className="px-5 py-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white text-xs font-bold transition-all flex items-center gap-2 border border-slate-700 cursor-pointer"
-            >
-              <Coins className="w-4 h-4 text-amber-400" /> Wallet ({currentUser.creditsBalance?.toFixed(1) || 5.0} CR)
-            </button>
-          </div>
+          <p className="text-xs sm:text-sm text-slate-500 font-sans">
+            Your personal progress, learning trajectories, verified proofs, and community standings.
+          </p>
         </div>
 
-        {/* Ambient Glow */}
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => onNavigate('matches')}
+            className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-xs active:scale-95 whitespace-nowrap cursor-pointer font-sans"
+          >
+            <Compass className="w-4 h-4" /> Find Matches
+          </button>
+        </div>
       </div>
 
       {/* ── 2. TOP METRICS CARDS ─────────────────────────────────────────── */}
