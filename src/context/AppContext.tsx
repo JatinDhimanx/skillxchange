@@ -174,6 +174,7 @@ export interface AppContextType {
   // Fusion Sessions (60.6)
   fusionOptions: FusionSessionOption[];
   requestFusionSession: (fusionId: string) => void;
+  createFusionSession: (fusion: Omit<FusionSessionOption, 'id'>) => void;
 
   // Predictive Matches (60.7)
   predictiveMatches: PredictiveMatch[];
@@ -425,6 +426,75 @@ const BLANK_GUEST_USER: UserProfile = {
   badges: [],
   role: 'user',
 };
+
+export const SEED_FUSION_OPTIONS: FusionSessionOption[] = [
+  {
+    id: 'fusion-1',
+    title: 'AI Audio Synthesis & Deep Learning DSP',
+    primarySkill: 'Python & PyTorch',
+    secondarySkill: 'Music Production & Audio DSP',
+    categoryCombo: 'AI + Music',
+    compatibilityScore: 98,
+    suggestedSplitMins: '30m PyTorch Audio + 30m Ableton Sound Design',
+    rationale: 'Combining digital signal processing theory with deep generative models produces immediate audible feedback for model latent spaces.',
+    idealFor: 'Software developers wanting creative AI sound synthesis.',
+  },
+  {
+    id: 'fusion-2',
+    title: 'Web3 Distributed Ledgers & Cryptographic Systems',
+    primarySkill: 'Solidity & Smart Contracts',
+    secondarySkill: 'Distributed Systems & Go',
+    categoryCombo: 'Blockchain + Systems',
+    compatibilityScore: 96,
+    suggestedSplitMins: '30m Go Consensus + 30m EVM Bytecode',
+    rationale: 'Understanding Raft/Paxos consensus deepens intuition for proof-of-stake finality and Byzantine fault tolerance.',
+    idealFor: 'Engineers building high-throughput decentralized protocols.',
+  },
+  {
+    id: 'fusion-3',
+    title: 'WebGL 3D Shaders & Creative Brand UI/UX',
+    primarySkill: 'GLSL Shaders & Three.js',
+    secondarySkill: 'UI/UX Design Systems',
+    categoryCombo: 'Design + 3D Graphics',
+    compatibilityScore: 95,
+    suggestedSplitMins: '30m Figma Spatial Tokens + 30m GLSL Fragment Math',
+    rationale: 'Connecting spatial aesthetic layout rules with GPU-accelerated raymarching enables world-class interactive web experiences.',
+    idealFor: 'Creative technologists and frontend design engineers.',
+  },
+  {
+    id: 'fusion-4',
+    title: 'Conversational Spanish & Latin American Culinary Arts',
+    primarySkill: 'Conversational Spanish',
+    secondarySkill: 'Regional Mexican & Spanish Gastronomy',
+    categoryCombo: 'Language + Culinary',
+    compatibilityScore: 94,
+    suggestedSplitMins: '30m Vocabulary Practice + 30m Live Recipe Prep',
+    rationale: 'Contextual immersion in culinary terminology builds rapid natural vocabulary retention without rote grammar memorization.',
+    idealFor: 'Language enthusiasts learning through experiential practice.',
+  },
+  {
+    id: 'fusion-5',
+    title: 'Algorithmic High-Frequency Trading & Quantitative Python',
+    primarySkill: 'Python Pandas & NumPy',
+    secondarySkill: 'Financial Derivatives & Options Math',
+    categoryCombo: 'Finance + Code',
+    compatibilityScore: 97,
+    suggestedSplitMins: '30m Black-Scholes Greeks + 30m Vectorized Backtesting',
+    rationale: 'Mathematical options modeling directly maps to vectorized NumPy array computations and risk-neutral hedging simulations.',
+    idealFor: 'Quantitative analysts and data scientists entering finance.',
+  },
+  {
+    id: 'fusion-6',
+    title: 'Executive Board Rhetoric & Technical Architecture Defense',
+    primarySkill: 'Executive Speech & Debate',
+    secondarySkill: 'Cloud Microservices Architecture',
+    categoryCombo: 'Communication + Architecture',
+    compatibilityScore: 93,
+    suggestedSplitMins: '30m System Architecture Diagram + 30m Pitch Defense',
+    rationale: 'Engineers who learn rhetorical argumentation successfully defend complex architectural tradeoffs to non-technical stakeholders.',
+    idealFor: 'Tech leads, staff engineers, and engineering managers.',
+  },
+];
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -790,7 +860,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeQuizProof, setActiveQuizProof] = useState<SessionTranscriptProof | null>(null);
   const [dynamicRates, setDynamicRates] = useState<DynamicSkillRate[]>([]);
   const [bounties, setBounties] = useState<SkillBounty[]>([]);
-  const [fusionOptions] = useState<FusionSessionOption[]>([]);
+  const [fusionOptions, setFusionOptions] = useState<FusionSessionOption[]>(SEED_FUSION_OPTIONS);
   const [predictiveMatches] = useState<PredictiveMatch[]>([]);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [searchQueryNotebook, setSearchQueryNotebook] = useState<string>('');
@@ -1736,7 +1806,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const requestFusionSession = (fusionId: string) => {
     const fusion = fusionOptions.find(f => f.id === fusionId);
-    showToast(`Cross-Skill Fusion requested: ${fusion?.title}`, 'success');
+    showToast(`Cross-Skill Fusion matched: "${fusion?.title}". Invite sent to mentor! ✨`, 'success');
+  };
+
+  const createFusionSession = (fusion: Omit<FusionSessionOption, 'id'>) => {
+    const newFusion: FusionSessionOption = {
+      ...fusion,
+      id: `fusion-${Date.now()}`,
+    };
+    setFusionOptions(prev => [newFusion, ...prev]);
+    showToast(`Hybrid Fusion "${newFusion.title}" published! 🚀`, 'success');
   };
 
   const filteredNotebookEntries = useMemo(() => {
@@ -1947,6 +2026,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fusionOptions,
         predictiveMatches,
         requestFusionSession,
+        createFusionSession,
         notebookEntries,
         searchQueryNotebook,
         setSearchQueryNotebook,
