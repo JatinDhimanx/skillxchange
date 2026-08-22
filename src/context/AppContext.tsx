@@ -480,13 +480,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<{ success: boolean; needsEmailVerification: boolean; error: string | null }> => {
     setIsAuthLoading(true);
     try {
-      const { user, needsEmailVerification, error } = await signUpUser(data);
+      const { user, needsEmailVerification, error, warning } = await signUpUser(data);
       if (error) {
         showToast(error, 'warning');
         return { success: false, needsEmailVerification: false, error };
       }
 
       if (user) {
+        if (warning) {
+          showToast(warning, 'warning');
+        }
         setAllUsers(prev => [user, ...prev.filter(u => u.id !== user.id)]);
         
         if (!needsEmailVerification) {

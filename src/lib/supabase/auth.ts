@@ -107,11 +107,82 @@ export async function fetchUserProfile(userId: string): Promise<UserProfile | nu
   }
 }
 
+// ── 1a. Sync Pending Skills from Auth Metadata ─────────────────────────────────
+// If a user signed up with a teach/learn skill while email confirmation was
+// pending, those skills live only in auth user_metadata (the trigger that
+// creates the profile row doesn't touch the skill tables, and the client
+// couldn't write them as an unauthenticated session — see signUpUser). Once
+// the user actually has a session (first real sign-in), RLS allows the write,
+// so we finish the job here rather than silently losing that data forever.
+async function syncPendingSkillsFromMetadata(userId: string, meta: Record<string, any>): Promise<void> {
+  if (!supabase) return;
+  const teachSkill = meta.teach_skill as string | undefined;
+  const learnSkill = meta.learn_skill as string | undefined;
+  if (!teachSkill && !learnSkill) return;
+
+  try {
+    const [{ data: existingTeach }, { data: existingLearn }] = await Promise.all([
+      supabase.from('user_skills_teaching').select('id').eq('user_id', userId),
+      supabase.from('user_skills_learning').select('id').eq('user_id', userId),
+    ]);
+
+    if (teachSkill && !(existingTeach && existingTeach.length > 0)) {
+      await supabase.from('user_skills_teaching').insert({
+        user_id: userId,
+        skill_name: teachSkill,
+        category: 'General',
+        level: 'Intermediate',
+        years_experience: 1,
+        verified: true,
+        hourly_rate_credits: 1.0,
+        hourly_rate_inr: 500,
+        proof_count: 1,
+      });
+      await supabase.from('skills').upsert({
+        name: teachSkill,
+        category: 'User Added',
+        description: `Taught by ${meta.name || 'a SkillXchange member'}`,
+        demand_multiplier: 1.2,
+      }, { onConflict: 'name' });
+    }
+
+    if (learnSkill && !(existingLearn && existingLearn.length > 0)) {
+      await supabase.from('user_skills_learning').insert({
+        user_id: userId,
+        skill_name: learnSkill,
+        target_level: 'Intermediate',
+        urgency: 'flexible',
+        progress_percent: 0,
+      });
+    }
+  } catch {
+    // Best-effort only — never block sign-in over this.
+  }
+}
+
+// ── 2a. Check Handle Availability (prevents silent unique-constraint failures) ─
+export async function isHandleTaken(handle: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  const handleClean = handle.startsWith('@') ? handle : `@${handle}`;
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('handle', handleClean)
+      .maybeSingle();
+    if (error) return false; // fail-open: don't block signup on a check-query error
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
 // ── 2. Sign Up User with Email Verification Support ────────────────────────────
 export async function signUpUser(data: SignUpData): Promise<{
   user: UserProfile | null;
   needsEmailVerification: boolean;
   error: string | null;
+  warning?: string | null;
 }> {
   const avatarUrl =
     data.avatar ||
@@ -125,6 +196,24 @@ export async function signUpUser(data: SignUpData): Promise<{
     };
   }
 
+  // Validate + normalize handle up front, and reject duplicates before we ever
+  // create the Auth user. Without this, two signups that land on the same
+  // handle (e.g. two "Aarav Sharma"s) silently fail to write a profile row
+  // later on, leaving a real Auth account with no matching profile.
+  const rawHandle = (data.handle || data.name).trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (!rawHandle) {
+    return { user: null, needsEmailVerification: false, error: 'Please choose a valid handle using letters, numbers, or underscores.' };
+  }
+  data = { ...data, handle: rawHandle };
+
+  if (await isHandleTaken(rawHandle)) {
+    return {
+      user: null,
+      needsEmailVerification: false,
+      error: `The handle @${rawHandle} is already taken. Please choose a different one.`,
+    };
+  }
+
   try {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
@@ -134,6 +223,7 @@ export async function signUpUser(data: SignUpData): Promise<{
           name: data.name,
           handle: data.handle,
           avatar: avatarUrl,
+          headline: data.headline || 'Skill Exchange Member',
           teach_skill: data.teachSkill,
           learn_skill: data.learnSkill,
         },
@@ -153,9 +243,11 @@ export async function signUpUser(data: SignUpData): Promise<{
         const fallbackUserId = `user-${Date.now()}`;
         const handleClean = data.handle.startsWith('@') ? data.handle : `@${data.handle}`;
 
+        let fallbackProfileError: string | null = null;
         try {
-          await supabase.from('profiles').upsert({
+          const { error: fallbackInsertError } = await supabase.from('profiles').upsert({
             id: fallbackUserId,
+            email: data.email.trim().toLowerCase(),
             name: data.name,
             handle: handleClean,
             avatar: avatarUrl,
@@ -166,7 +258,18 @@ export async function signUpUser(data: SignUpData): Promise<{
             trust_score: 90,
             streak_days: 1,
           });
-        } catch {}
+          if (fallbackInsertError) fallbackProfileError = fallbackInsertError.message;
+        } catch (e: any) {
+          fallbackProfileError = e?.message || 'Unknown error creating fallback profile.';
+        }
+
+        if (fallbackProfileError) {
+          return {
+            user: null,
+            needsEmailVerification: false,
+            error: `We couldn't create your account (${fallbackProfileError}). Please try a different handle or email.`,
+          };
+        }
 
         const fallbackUser: UserProfile = {
           id: fallbackUserId,
@@ -238,54 +341,93 @@ export async function signUpUser(data: SignUpData): Promise<{
     const userId = authData.user?.id || `user-${Date.now()}`;
     const handleClean = data.handle.startsWith('@') ? data.handle : `@${data.handle}`;
 
-    // Create profile in profiles table
-    await supabase.from('profiles').upsert({
-      id: userId,
-      email: data.email.trim().toLowerCase(),
-      name: data.name,
-      handle: handleClean,
-      avatar: avatarUrl,
-      headline: data.headline || 'Skill Exchange Enthusiast',
-      bio: `Hello! I am ${data.name}. Excited to barter skills on SkillXchange.`,
-      credit_balance: 5.0,
-      rating: 5.0,
-      trust_score: 90,
-      streak_days: 1,
-    });
+    // IMPORTANT: public.profiles has an `on_auth_user_created` trigger
+    // (SECURITY DEFINER) that already inserts a matching profile row the
+    // moment the Auth user is created — using the metadata we just passed
+    // to signUp() above (name/handle/avatar/headline/teach_skill/learn_skill).
+    // That trigger runs regardless of session state, so it always succeeds.
+    //
+    // Whether *we* can also write here from the client depends on whether a
+    // session was issued: if email confirmation is required, authData.session
+    // is null and this request runs as anon. The `profiles` INSERT policy
+    // tolerates anon (auth.uid() IS NULL), but since the trigger's row
+    // already exists, our upsert takes the ON CONFLICT DO UPDATE path, which
+    // requires auth.uid() = id — impossible while anon. The teaching/learning
+    // skill tables have no anon fallback at all, so those inserts would fail
+    // outright. Attempting either as anon would either no-op or throw a
+    // confusing RLS error for something that already succeeded via the
+    // trigger, so we only do these writes when we actually hold a session.
+    let skillWarning: string | null = null;
+    const hasSession = Boolean(authData.session);
 
-    // Insert teaching skill if provided
-    if (data.teachSkill) {
-      await supabase.from('user_skills_teaching').insert({
-        user_id: userId,
-        skill_name: data.teachSkill,
-        category: 'General',
-        level: 'Intermediate',
-        years_experience: 1,
-        verified: true,
-        hourly_rate_credits: 1.0,
-        hourly_rate_inr: 500,
-        proof_count: 1,
+    if (hasSession) {
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: userId,
+        email: data.email.trim().toLowerCase(),
+        name: data.name,
+        handle: handleClean,
+        avatar: avatarUrl,
+        headline: data.headline || 'Skill Exchange Enthusiast',
+        bio: `Hello! I am ${data.name}. Excited to barter skills on SkillXchange.`,
+        credit_balance: 5.0,
+        rating: 5.0,
+        trust_score: 90,
+        streak_days: 1,
       });
 
-      // Also ensure skill is in global directory
-      await supabase.from('skills').upsert({
-        name: data.teachSkill,
-        category: 'User Added',
-        description: `Taught by ${data.name}`,
-        demand_multiplier: 1.2,
-      }, { onConflict: 'name' });
-    }
+      if (profileError) {
+        return {
+          user: null,
+          needsEmailVerification: false,
+          error: `Your account was created but we couldn't set up your profile (${profileError.message}). Please try signing in — if that fails, contact support.`,
+        };
+      }
 
-    // Insert learning skill if provided
-    if (data.learnSkill) {
-      await supabase.from('user_skills_learning').insert({
-        user_id: userId,
-        skill_name: data.learnSkill,
-        target_level: 'Intermediate',
-        urgency: 'flexible',
-        progress_percent: 0,
-      });
+      // Insert teaching skill if provided. Non-fatal: we surface a warning
+      // through the error channel only if it fails, but don't block signup.
+      if (data.teachSkill) {
+        const { error: teachError } = await supabase.from('user_skills_teaching').insert({
+          user_id: userId,
+          skill_name: data.teachSkill,
+          category: 'General',
+          level: 'Intermediate',
+          years_experience: 1,
+          verified: true,
+          hourly_rate_credits: 1.0,
+          hourly_rate_inr: 500,
+          proof_count: 1,
+        });
+        if (teachError) skillWarning = `Your account was created, but we couldn't save your teaching skill (${teachError.message}). You can add it later from your profile.`;
+
+        // Also ensure skill is in global directory
+        await supabase.from('skills').upsert({
+          name: data.teachSkill,
+          category: 'User Added',
+          description: `Taught by ${data.name}`,
+          demand_multiplier: 1.2,
+        }, { onConflict: 'name' });
+      }
+
+      // Insert learning skill if provided
+      if (data.learnSkill) {
+        const { error: learnError } = await supabase.from('user_skills_learning').insert({
+          user_id: userId,
+          skill_name: data.learnSkill,
+          target_level: 'Intermediate',
+          urgency: 'flexible',
+          progress_percent: 0,
+        });
+        if (learnError && !skillWarning) {
+          skillWarning = `Your account was created, but we couldn't save your learning goal (${learnError.message}). You can add it later from your profile.`;
+        }
+      }
     }
+    // else: no session yet (pending email confirmation). The trigger already
+    // created the profile from our metadata, and teach_skill/learn_skill are
+    // preserved in auth user_metadata — signInUser() finishes the job by
+    // syncing them into the skill tables the first time the user actually
+    // authenticates (see syncPendingSkillsFromMetadata below), once RLS can
+    // see a real auth.uid().
 
     const userProfile: UserProfile = {
       id: userId,
@@ -351,7 +493,9 @@ export async function signUpUser(data: SignUpData): Promise<{
     // If session is null, Supabase has email confirmation enabled
     const needsEmailVerification = Boolean(authData.user && !authData.session);
 
-    return { user: userProfile, needsEmailVerification, error: null };
+    // Account + profile succeeded; skillWarning (if any) is informational only
+    // and should not block the user from proceeding.
+    return { user: userProfile, needsEmailVerification, error: null, warning: skillWarning };
   } catch (err: any) {
     return { user: null, needsEmailVerification: false, error: err.message || 'An unexpected error occurred.' };
   }
@@ -426,7 +570,52 @@ export async function signInUser(data: SignInData): Promise<{
     }
 
     // Fetch full profile from DB
-    const profile = await fetchUserProfile(authData.user.id);
+    let profile = await fetchUserProfile(authData.user.id);
+
+    // Self-heal: the credentials were correct (Supabase Auth just accepted
+    // them), but the profile row is missing — most likely because the
+    // profile write during signup failed silently in the past, or the
+    // account was created before this fix. Rebuild a minimal profile from
+    // the Auth user's metadata instead of telling the user their correct
+    // password is "invalid", which is misleading and sends people down a
+    // pointless password-reset path.
+    if (!profile) {
+      const meta = authData.user.user_metadata || {};
+      const fallbackHandle = (meta.handle || `@${(authData.user.email || 'user').split('@')[0]}`) as string;
+      const { error: healError } = await supabase.from('profiles').upsert({
+        id: authData.user.id,
+        email: authData.user.email,
+        name: meta.name || 'SkillXchange Member',
+        handle: fallbackHandle,
+        avatar: meta.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        headline: 'Skill Exchange Enthusiast',
+        bio: `Hello! I am ${meta.name || 'a member'}. Excited to barter skills on SkillXchange.`,
+        credit_balance: 5.0,
+        rating: 5.0,
+        trust_score: 90,
+        streak_days: 1,
+      });
+
+      if (!healError) {
+        profile = await fetchUserProfile(authData.user.id);
+      }
+
+      if (!profile) {
+        return {
+          user: null,
+          session: authData.session,
+          error: 'Your password is correct, but we could not load your profile data. Please try again in a moment or contact support.',
+        };
+      }
+    }
+
+    // Finish syncing any teach/learn skill picked during signup that couldn't
+    // be written while email confirmation was pending. Cheap no-op once done.
+    const authMeta = authData.user.user_metadata || {};
+    await syncPendingSkillsFromMetadata(authData.user.id, authMeta);
+    if (!profile.skillsToTeach.length && !profile.skillsToLearn.length && (authMeta.teach_skill || authMeta.learn_skill)) {
+      profile = (await fetchUserProfile(authData.user.id)) || profile;
+    }
 
     return { user: profile, session: authData.session, error: null };
   } catch (err: any) {
