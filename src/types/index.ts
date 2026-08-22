@@ -327,11 +327,29 @@ export interface PeerChatMessage {
   timestamp: string;
   isMe: boolean;
   status?: 'sent' | 'delivered' | 'read';
+  type?: 'text' | 'proposal' | 'audio' | 'snippet';
+  proposalData?: BarterSwapProposal;
   attachment?: {
     type: 'snippet' | 'note' | 'drill';
     title: string;
     content: string;
   };
+}
+
+export interface BarterSwapProposal {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  receiverId: string;
+  receiverName: string;
+  receiverAvatar: string;
+  offeredSkill: string;
+  wantedSkill: string;
+  status: 'pending' | 'accepted' | 'declined' | 'completed';
+  proposedAt: string;
+  notes?: string;
+  escrowCredits: number;
 }
 
 export interface ChatPeerInfo {
@@ -359,4 +377,6 @@ export interface ActivityNotification {
   time: string;
   type: 'match' | 'chain' | 'credit' | 'proof';
   read: boolean;
+  proposalId?: string;
+  actionUrl?: string;
 }

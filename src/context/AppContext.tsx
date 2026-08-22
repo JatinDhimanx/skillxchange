@@ -21,6 +21,7 @@ import {
   UserLearningGoal,
   PeerChatMessage,
   ChatPeerInfo,
+  BarterSwapProposal,
 } from '../types';
 import {
   USERS,
@@ -133,9 +134,12 @@ interface AppContextType {
   addSkillToLearn: (skillName: string, targetLevel: string, urgency: string) => void;
   removeSkillToLearn: (skillId: string) => void;
 
-  // Direct Matching
+  // Direct Matching & Barter Swaps
   candidates: MatchCandidate[];
-  sendExchangeProposal: (targetUserId: string, offeredSkill: string, wantedSkill: string) => void;
+  swapProposals: BarterSwapProposal[];
+  sendExchangeProposal: (targetUserId: string, offeredSkill: string, wantedSkill: string, notes?: string) => void;
+  acceptExchangeProposal: (proposalId: string) => void;
+  declineExchangeProposal: (proposalId: string) => void;
   bookPaidTeacher: (teacherId: string, skillName: string, rateInr: number) => void;
 
   // Skill Chains & Futures (60.1)
@@ -930,10 +934,145 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).sort((a, b) => b.matchScore - a.matchScore);
   }, [currentUser, allUsers]);
 
+  // Dynamic Barter Swap Proposals State
+  const [swapProposals, setSwapProposals] = useState<BarterSwapProposal[]>([]);
+
+  // Load proposals per user from localStorage on client
+  useEffect(() => {
+    if (typeof window !== 'undefined' && currentUser.id) {
+      try {
+        const saved = localStorage.getItem(`skillxchange_proposals_${currentUser.id}`);
+        if (saved) {
+          setSwapProposals(JSON.parse(saved));
+        }
+      } catch {}
+    }
+  }, [currentUser.id]);
+
+  const saveProposalsToStorage = (list: BarterSwapProposal[]) => {
+    setSwapProposals(list);
+    if (typeof window !== 'undefined' && currentUser.id) {
+      try {
+        localStorage.setItem(`skillxchange_proposals_${currentUser.id}`, JSON.stringify(list));
+      } catch {}
+    }
+  };
+
   // Actions
-  const sendExchangeProposal = (targetUserId: string, offeredSkill: string, wantedSkill: string) => {
+  const sendExchangeProposal = (targetUserId: string, offeredSkill: string, wantedSkill: string, notes?: string) => {
     const target = allUsers.find(u => u.id === targetUserId);
-    showToast(`Exchange request sent to ${target?.name || 'peer'}! (${offeredSkill} ⇄ ${wantedSkill})`, 'success');
+    const targetName = target?.name || 'Peer';
+    const targetAvatar = target?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
+
+    const newProposal: BarterSwapProposal = {
+      id: `prop-${Date.now()}`,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderAvatar: currentUser.avatar,
+      receiverId: targetUserId,
+      receiverName: targetName,
+      receiverAvatar: targetAvatar,
+      offeredSkill,
+      wantedSkill,
+      status: 'pending',
+      proposedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      notes: notes || '1-on-1 Bilateral Skill Swap (0 INR, Escrow Protected)',
+      escrowCredits: 1.0,
+    };
+
+    const updated = [newProposal, ...swapProposals];
+    saveProposalsToStorage(updated);
+
+    // Push proposal message into peer chat
+    const proposalMsg: PeerChatMessage = {
+      id: `msg-prop-${Date.now()}`,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderAvatar: currentUser.avatar,
+      text: `🤝 Proposed a 1-on-1 Barter Swap: You teach ${offeredSkill} in exchange for ${wantedSkill}.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isMe: true,
+      type: 'proposal',
+      proposalData: newProposal,
+      status: 'delivered',
+    };
+
+    setPeerConversations(prev => ({
+      ...prev,
+      [targetUserId]: [...(prev[targetUserId] || []), proposalMsg],
+    }));
+
+    addNotification(
+      `Swap Proposal Sent to ${targetName}`,
+      `Offered: ${offeredSkill} ⇄ Wanted: ${wantedSkill}`,
+      'match'
+    );
+
+    showToast(`Bilateral barter request sent to ${targetName}! (${offeredSkill} ⇄ ${wantedSkill})`, 'success');
+
+    // Auto peer response & acceptance simulation
+    setTimeout(() => {
+      acceptExchangeProposal(newProposal.id, true);
+    }, 2800);
+  };
+
+  const acceptExchangeProposal = (proposalId: string, isFromPeer = false) => {
+    let targetProp: BarterSwapProposal | undefined;
+
+    setSwapProposals(prev => {
+      targetProp = prev.find(p => p.id === proposalId);
+      const updated = prev.map(p => (p.id === proposalId ? { ...p, status: 'accepted' as const } : p));
+      if (typeof window !== 'undefined' && currentUser.id) {
+        try {
+          localStorage.setItem(`skillxchange_proposals_${currentUser.id}`, JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+
+    setTimeout(() => {
+      const peerName = targetProp ? (isFromPeer ? targetProp.receiverName : targetProp.senderName) : 'Peer';
+      const peerId = targetProp ? (isFromPeer ? targetProp.receiverId : targetProp.senderId) : '';
+
+      if (peerId) {
+        const acceptMsg: PeerChatMessage = {
+          id: `msg-acc-${Date.now()}`,
+          senderId: peerId,
+          senderName: peerName,
+          senderAvatar: targetProp?.receiverAvatar || '',
+          text: `🎉 Swap Proposal Accepted! I've locked 1.0 barter credit in smart contract escrow. Click Study Room above to meet!`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isMe: false,
+          status: 'read',
+        };
+
+        setPeerConversations(prev => ({
+          ...prev,
+          [peerId]: [...(prev[peerId] || []), acceptMsg],
+        }));
+      }
+
+      addNotification(
+        `🎉 Swap Accepted by ${peerName}!`,
+        `Smart contract escrow locked 1.0 credit. You can now launch your collaborative live room.`,
+        'match'
+      );
+
+      showToast(`Swap proposal accepted! Escrow smart contract verified. 🎉`, 'success');
+    }, 500);
+  };
+
+  const declineExchangeProposal = (proposalId: string) => {
+    setSwapProposals(prev => {
+      const updated = prev.map(p => (p.id === proposalId ? { ...p, status: 'declined' as const } : p));
+      if (typeof window !== 'undefined' && currentUser.id) {
+        try {
+          localStorage.setItem(`skillxchange_proposals_${currentUser.id}`, JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+    showToast('Swap proposal declined.', 'info');
   };
 
   const bookPaidTeacher = (teacherId: string, skillName: string, rateInr: number) => {
@@ -1265,7 +1404,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addSkillToLearn,
         removeSkillToLearn,
         candidates,
+        swapProposals,
         sendExchangeProposal,
+        acceptExchangeProposal,
+        declineExchangeProposal,
         bookPaidTeacher,
         skillChains,
         futureCommitments,
