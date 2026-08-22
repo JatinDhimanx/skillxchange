@@ -5,7 +5,7 @@ import { Zap, PartyPopper, Repeat, Star, FileText, GraduationCap, Coins, Users, 
 
 const FEED_EVENTS = [
   { icon: <PartyPopper className="w-3.5 h-3.5 text-emerald-600" />, text: 'Alex just finished teaching Python to Maya Chen', time: '2m ago' },
-  { icon: <Repeat className="w-3.5 h-3.5 text-amber-600" />, text: 'New 3-way chain closed: Guitar → Japanese → React', time: '5m ago' },
+  { icon: <Zap className="w-3.5 h-3.5 text-amber-600" />, text: 'New 1-on-1 swap completed: Guitar ⇄ React', time: '5m ago' },
   { icon: <Star className="w-3.5 h-3.5 text-yellow-500" />, text: 'Priya earned "Top Teacher" badge — 50+ sessions!', time: '8m ago' },
   { icon: <FileText className="w-3.5 h-3.5 text-blue-600" />, text: 'David posted a Figma Design Bounty · 5 bids received', time: '12m ago' },
   { icon: <GraduationCap className="w-3.5 h-3.5 text-purple-600" />, text: 'Liam completed Advanced GLSL with verified certificate', time: '15m ago' },

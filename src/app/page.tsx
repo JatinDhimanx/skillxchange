@@ -233,7 +233,7 @@ const MainAppContent: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 font-mono-ledger text-[11px] text-slate-500">
-            <span className="hover:text-slate-900 transition-colors cursor-pointer">Zero-Fiat Chains</span>
+            <span className="hover:text-slate-900 transition-colors cursor-pointer">Live Study Rooms</span>
             <span>•</span>
             <span className="hover:text-slate-900 transition-colors cursor-pointer">Dynamic SVI Float</span>
             <span>•</span>

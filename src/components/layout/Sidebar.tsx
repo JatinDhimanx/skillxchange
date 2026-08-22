@@ -50,13 +50,6 @@ export const Sidebar: React.FC = () => {
       isSection60: true,
     },
     {
-      id: 'skill-chains',
-      label: '3-Person Skill Chains',
-      badge: 'Zero-Fiat',
-      badgeColor: 'bg-[#E7A33E]/20 text-[#E7A33E] border-[#E7A33E]',
-      icon: GitFork,
-    },
-    {
       id: 'futures-market',
       label: 'Skill Futures Market',
       badge: `60.1 (${futureCommitments.length})`,

@@ -26,6 +26,7 @@ import {
   Repeat,
   Compass,
   ShieldCheck,
+  Video,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { isSupabaseConfigured } from '../../lib/supabase/client';
@@ -288,7 +289,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </h2>
 
             <p className="text-xs text-slate-300 mt-3 leading-relaxed">
-              Exchange skills directly 1-on-1 or via automated 3-way trade loops. Earn barter credits verified with cryptographic ledger proofs.
+              Exchange skills directly 1-on-1 with interactive study rooms, real-time video, and cryptographically verified ledger certificates.
             </p>
           </div>
 
@@ -296,11 +297,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="relative z-10 space-y-2.5 my-6">
             <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/80">
               <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                <Repeat className="w-4 h-4" />
+                <Video className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white">3-Way Circular Trades</p>
-                <p className="text-[10px] text-slate-400 font-mono-ledger">Triangular matching algorithm</p>
+                <p className="text-xs font-bold text-white">Live Study Rooms</p>
+                <p className="text-[10px] text-slate-400 font-mono-ledger">WebRTC video, audio & whiteboard</p>
               </div>
             </div>
 
@@ -309,8 +310,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <Coins className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white">5.0 Barter Credits Bonus</p>
-                <p className="text-[10px] text-slate-400 font-mono-ledger">Instant genesis credit allocation</p>
+                <p className="text-xs font-bold text-white">Barter Credits Economy</p>
+                <p className="text-[10px] text-slate-400 font-mono-ledger">Earn every time you teach peers</p>
               </div>
             </div>
 
@@ -411,7 +412,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left flex items-start gap-2.5">
                   <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="leading-relaxed text-[11.5px]">
-                    After confirming via the email link, sign in with your credentials to unlock live study rooms, peer matching, and your 5.0 genesis barter credits!
+                    After confirming via the email link, sign in with your credentials to unlock live study rooms, bilateral peer matching, and start swapping skills!
                   </p>
                 </div>
                 <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
@@ -801,12 +802,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     {/* Genesis Bonus Box */}
                     <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-3">
                       <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <Coins className="w-4 h-4" />
+                        <Shield className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-amber-950">Genesis Welcome Grant</p>
+                        <p className="text-xs font-bold text-amber-950">Decentralized Genesis Profile</p>
                         <p className="text-[10.5px] text-amber-800 font-mono-ledger">
-                          Includes <strong>5.0 Barter Credits</strong> + verified SHA-256 Ledger ID block.
+                          Includes verified SHA-256 Ledger ID block & zero-fiat barter wallet.
                         </p>
                       </div>
                     </div>

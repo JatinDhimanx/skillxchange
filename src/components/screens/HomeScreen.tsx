@@ -23,6 +23,7 @@ import {
   Shield,
   Code,
   Music,
+  Sparkles,
   Globe,
   Palette,
   FlaskConical,
@@ -147,8 +148,8 @@ const FEATURE_HIGHLIGHTS = [
   { icon: <Shield className="w-5 h-5 text-emerald-600" />, title: 'Escrow Protected', desc: 'Credits are held until the session ends and both sides confirm delivery.' },
   { icon: <CheckCircle2 className="w-5 h-5 text-blue-600" />, title: 'Verified Skills', desc: 'AI transcript proof + micro-quizzes create tamper-proof skill certificates.' },
   { icon: <Flame className="w-5 h-5 text-orange-600" />, title: 'Streak Rewards', desc: 'Daily teaching streaks earn bonus XP, badges, and visibility boosts.' },
-  { icon: <Repeat className="w-5 h-5 text-amber-600" />, title: '3-Way Chains', desc: 'When direct swaps aren\'t possible, we form automated triangular exchange loops.' },
-  { icon: <Mic className="w-5 h-5 text-purple-600" />, title: 'AI Voice Lab', desc: 'Practice soft skills with real-time speech analysis for clarity and confidence.' },
+  { icon: <Sparkles className="w-5 h-5 text-purple-600" />, title: 'Fusion Sessions', desc: 'Cross-discipline exchange workshops blending coding, design, and audio.' },
+  { icon: <Mic className="w-5 h-5 text-amber-600" />, title: 'AI Voice Lab', desc: 'Practice soft skills with real-time speech analysis for clarity and confidence.' },
   { icon: <Award className="w-5 h-5 text-rose-600" />, title: 'Skill Bounties', desc: 'Post a bounty for a specific skill. Teachers bid to teach you — you pick the best.' },
 ];
 
@@ -246,7 +247,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
             <span className="text-emerald-600">something.</span>
           </h1>
           <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto font-normal leading-relaxed">
-            Trade skills peer-to-peer, join automated 3-way chains, or earn credits every time you teach — completely free, forever.
+            Trade skills peer-to-peer 1-on-1, practice in live interactive study rooms, and earn barter credits every time you teach.
           </p>
         </div>
 
@@ -360,10 +361,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
                 Find My Matches <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={() => onNavigate('chains')}
-                className="px-7 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
+                onClick={() => onNavigate('session')}
+                className="px-7 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
               >
-                Explore 3-Way Chains <Repeat className="w-4 h-4" />
+                Open Study Room <Video className="w-4 h-4" />
               </button>
             </>
           ) : (
@@ -372,19 +373,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
                 onClick={() => openAuthModal('signup')}
                 className="px-7 py-3 rounded-full bg-slate-900 hover:bg-emerald-600 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
               >
-                <span>Get Started (Free 5.0 Credits)</span> <ArrowRight className="w-4 h-4" />
+                <span>Get Started Free</span> <ArrowRight className="w-4 h-4" />
               </button>
               <button
                 onClick={() => openAuthModal('signin')}
                 className="px-6 py-3 rounded-full bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-sm shadow-xs transition-all active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 Sign In
-              </button>
-              <button
-                onClick={() => onNavigate('chains')}
-                className="px-6 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
-              >
-                Explore Chains <Repeat className="w-4 h-4" />
               </button>
             </>
           )}
@@ -672,9 +667,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-3">
             {[
               { id: 'matches' as ScreenTab, label: 'Peer Matches', icon: <Users className="w-4 h-4 text-emerald-600" />, bg: 'hover:bg-emerald-50' },
-              { id: 'chains' as ScreenTab, label: '3-Way Chains', icon: <Repeat className="w-4 h-4 text-amber-600" />, bg: 'hover:bg-amber-50' },
               { id: 'session' as ScreenTab, label: 'Study Room', icon: <Video className="w-4 h-4 text-blue-600" />, bg: 'hover:bg-blue-50' },
-              { id: 'wallet' as ScreenTab, label: 'Credits', icon: <Wallet className="w-4 h-4 text-purple-600" />, bg: 'hover:bg-purple-50' },
+              { id: 'fusion' as ScreenTab, label: 'Fusion Labs', icon: <Sparkles className="w-4 h-4 text-purple-600" />, bg: 'hover:bg-purple-50' },
+              { id: 'wallet' as ScreenTab, label: 'Credits', icon: <Wallet className="w-4 h-4 text-amber-600" />, bg: 'hover:bg-amber-50' },
               { id: 'bounties' as ScreenTab, label: 'Bounties', icon: <Zap className="w-4 h-4 text-rose-600" />, bg: 'hover:bg-rose-50' },
               { id: 'soft_skills' as ScreenTab, label: 'Voice Lab', icon: <Mic className="w-4 h-4 text-amber-600" />, bg: 'hover:bg-amber-50' },
               { id: 'second_brain' as ScreenTab, label: 'Notes Wiki', icon: <BookOpen className="w-4 h-4 text-emerald-600" />, bg: 'hover:bg-emerald-50' },
@@ -808,15 +803,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
                 onClick={() => onNavigate('matches')}
-                className="px-8 py-3.5 rounded-full bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm shadow-lg transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap"
+                className="px-8 py-3.5 rounded-full bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm shadow-lg transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 Find Your First Exchange <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={() => onNavigate('chains')}
-                className="px-8 py-3.5 rounded-full bg-amber-500 hover:bg-amber-400 text-white font-bold text-sm shadow-lg transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap"
+                onClick={() => onNavigate('session')}
+                className="px-8 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer"
               >
-                Join a Skill Chain <Repeat className="w-4 h-4" />
+                Launch Study Room <Video className="w-4 h-4" />
               </button>
             </div>
           </div>

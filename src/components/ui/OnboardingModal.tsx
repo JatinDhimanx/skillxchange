@@ -33,7 +33,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
           <div className="grid grid-cols-3 gap-3 text-xs">
             {[
               { icon: <Users className="w-5 h-5 text-emerald-600" />, label: 'Match with peers who want what you know' },
-              { icon: <ArrowRight className="w-5 h-5 text-amber-600" />, label: 'Trade skills 1-on-1 or in 3-way loops' },
+              { icon: <ArrowRight className="w-5 h-5 text-amber-600" />, label: 'Trade skills 1-on-1 with live study rooms' },
               { icon: <BookOpen className="w-5 h-5 text-blue-600" />, label: 'Earn credits for every hour you teach' },
             ].map((item, i) => (
               <div key={i} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center gap-2">

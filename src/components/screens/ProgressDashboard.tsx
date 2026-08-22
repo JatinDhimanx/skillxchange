@@ -20,6 +20,7 @@ import {
   Coins,
   FileCheck,
   Medal,
+  Video,
 } from 'lucide-react';
 import { ScreenTab } from '../layout/HeaderNav';
 
@@ -47,7 +48,7 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onNavigate
     { id: 'first_teach', title: 'First Session', desc: 'Completed first teaching session', iconEl: <GraduationCap className="w-6 h-6 text-amber-600" />, earned: true },
     { id: 'streak_7', title: '7-Day Streak', desc: 'Taught 7 days in a row', iconEl: <Flame className="w-6 h-6 text-orange-500" />, earned: true },
     { id: 'verified', title: 'ID Verified', desc: 'Identity verification passed', iconEl: <ShieldCheck className="w-6 h-6 text-emerald-600" />, earned: currentUser.trustScore.identityVerified },
-    { id: 'chain_master', title: 'Chain Master', desc: 'Participated in a 3-way skill chain', iconEl: <Repeat className="w-6 h-6 text-blue-600" />, earned: true },
+    { id: 'chain_master', title: 'Study Room Master', desc: 'Completed a live peer exchange session', iconEl: <Video className="w-6 h-6 text-blue-600" />, earned: true },
     { id: 'top_teacher', title: 'Top Teacher', desc: 'Rated 5 stars in 3+ sessions', iconEl: <Star className="w-6 h-6 text-amber-500 fill-amber-500" />, earned: currentUser.trustScore.averageRating >= 4.5 },
     { id: 'streak_30', title: '30-Day Streak', desc: '30 consecutive days of teaching', iconEl: <Trophy className="w-6 h-6 text-amber-600" />, earned: currentUser.streakDays >= 30 },
     { id: 'bounty_hunter', title: 'Bounty Hunter', desc: 'Won 1+ skill bounty bids', iconEl: <Coins className="w-6 h-6 text-purple-600" />, earned: false },
@@ -63,7 +64,7 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onNavigate
     { step: 5, label: 'Complete a live study session', done: currentUser.teachingHours > 0 },
     { step: 6, label: 'Earn your first Skill Credit', done: currentUser.totalCreditsEarned > 0 },
     { step: 7, label: 'Earn a verified credential block', done: currentUser.trustScore.skillVerifiedCount > 0 },
-    { step: 8, label: 'Join a 3-way skill chain', done: false },
+    { step: 8, label: 'Host a live peer study room', done: false },
     { step: 9, label: 'Reach 100 XP', done: xp >= 100 },
     { step: 10, label: 'Maintain a 7-day streak', done: currentUser.streakDays >= 7 },
   ];

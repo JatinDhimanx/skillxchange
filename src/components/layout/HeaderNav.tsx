@@ -80,7 +80,6 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
   const mainNavItems: { id: ScreenTab; label: string; icon: React.ReactNode }[] = [
     { id: 'home',     label: 'Home',         icon: <Compass  className="w-4 h-4" /> },
     { id: 'matches',  label: 'Find Matches',  icon: <Users    className="w-4 h-4" /> },
-    { id: 'chains',   label: '3-Way Trades',  icon: <Repeat   className="w-4 h-4" /> },
     { id: 'session',  label: 'Study Room',    icon: <Video    className="w-4 h-4" /> },
     { id: 'wallet',   label: 'My Credits',    icon: <Wallet   className="w-4 h-4" /> },
     { id: 'progress', label: 'My Progress',   icon: <BarChart2 className="w-4 h-4" /> },
@@ -204,17 +203,6 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
 
           {/* ── RIGHT ACTIONS ─────────────────────── */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-
-            {/* Credits pill — md+ (Only when authenticated) */}
-            {isAuthenticated && (
-              <div
-                onClick={() => handleTabClick('wallet')}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 text-xs font-mono-ledger cursor-pointer transition-all shrink-0 whitespace-nowrap"
-              >
-                <Coins className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span className="font-bold text-slate-900">{currentUser.creditsBalance.toFixed(1)} CR</span>
-              </div>
-            )}
 
             {/* Add Skill (Only when authenticated) */}
             {isAuthenticated && (
@@ -378,7 +366,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
                         <p className="font-bold text-slate-900 text-xs truncate">{currentUser.name}</p>
                         <p className="text-[10px] text-slate-500 font-mono-ledger truncate">{currentUser.handle}</p>
                         <span className="inline-flex text-[9px] font-mono-ledger font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 mt-1">
-                          {currentUser.creditsBalance.toFixed(1)} Barter Credits
+                          Verified Member
                         </span>
                       </div>
                     </div>
@@ -485,13 +473,9 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
               <div className="pt-3 border-t border-slate-100">
                 {isAuthenticated ? (
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono-ledger font-bold">
-                      <Coins className="w-3.5 h-3.5 shrink-0" />
-                      {currentUser.creditsBalance.toFixed(1)} CR
-                    </div>
                     <button
                       onClick={() => { setShowAddSkillModal(true); setMobileMenuOpen(false); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-bold transition-all active:scale-95 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" /> Add Skill
                     </button>
