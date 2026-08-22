@@ -452,6 +452,16 @@ export async function saveNotebookEntryToDB(entry: NotebookEntry, userId?: strin
   }
 }
 
+export async function deleteNotebookEntryFromDB(entryId: string) {
+  if (!isSupabaseConfigured || !supabase || !entryId) return false;
+  try {
+    const { error } = await supabase.from('notebook_entries').delete().eq('id', entryId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================================
 // 6. CHAT MESSAGES SERVICE
 // ============================================================================

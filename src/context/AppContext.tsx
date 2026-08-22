@@ -46,6 +46,7 @@ import {
   fetchCreditTransactionsFromDB,
   recordCreditTransactionInDB,
   updateUserCreditBalanceInDB,
+  deleteNotebookEntryFromDB,
 } from '../lib/supabase/services';
 import {
   signUpUser,
@@ -182,6 +183,8 @@ export interface AppContextType {
   searchQueryNotebook: string;
   setSearchQueryNotebook: (q: string) => void;
   filteredNotebookEntries: NotebookEntry[];
+  addNotebookEntry: (entry: Omit<NotebookEntry, 'id' | 'date'>) => void;
+  deleteNotebookEntry: (id: string) => void;
 
   // Credential Ledger (60.9)
   credentialLedger: CredentialBlock[];
@@ -1747,6 +1750,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, [notebookEntries, searchQueryNotebook]);
 
+  const addNotebookEntry = (entry: Omit<NotebookEntry, 'id' | 'date'>) => {
+    const newEntry: NotebookEntry = {
+      ...entry,
+      id: `note-${Date.now()}`,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+
+    setNotebookEntries(prev => [newEntry, ...prev]);
+    saveNotebookEntryToDB(newEntry, currentUser.id);
+    showToast(`Note "${newEntry.title}" saved to your Second-Brain wiki! 📚`, 'success');
+  };
+
+  const deleteNotebookEntry = (id: string) => {
+    setNotebookEntries(prev => prev.filter(n => n.id !== id));
+    deleteNotebookEntryFromDB(id);
+    showToast('Note removed from Second-Brain wiki.', 'info');
+  };
+
   // Credential Ledger SHA-256 Block Minting
   const generateNewCredentialBlock = (learnerName: string, learnerId: string, skillName: string, scorePct: number) => {
     const lastBlock = credentialLedger[credentialLedger.length - 1];
@@ -1930,6 +1951,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         searchQueryNotebook,
         setSearchQueryNotebook,
         filteredNotebookEntries,
+        addNotebookEntry,
+        deleteNotebookEntry,
         credentialLedger,
         generateNewCredentialBlock,
         softSkillMetrics,
