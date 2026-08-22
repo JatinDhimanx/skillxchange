@@ -268,6 +268,7 @@ export const SessionScreen: React.FC = () => {
   const [remoteFrameUrl, setRemoteFrameUrl] = useState<string | null>(null);
   const [remotePeerInfo, setRemotePeerInfo] = useState<{ id: string; name: string; avatar: string } | null>(null);
   const [isSimulatedPeerActive, setIsSimulatedPeerActive] = useState<boolean>(false);
+  const [streamEndedInfo, setStreamEndedInfo] = useState<{ peerName: string; time: string } | null>(null);
 
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -323,6 +324,7 @@ export const SessionScreen: React.FC = () => {
 
   // Launch Live Meeting from Lobby (as Attendee or as Host)
   const handleJoinClass = (cls: LiveClassItem) => {
+    setStreamEndedInfo(null);
     setActiveMeeting({
       id: cls.id,
       roomCode: cls.roomCode,
@@ -349,6 +351,7 @@ export const SessionScreen: React.FC = () => {
     if (matched) {
       handleJoinClass(matched);
     } else {
+      setStreamEndedInfo(null);
       setActiveMeeting({
         id: `room-${Date.now()}`,
         roomCode: code,
@@ -375,6 +378,7 @@ export const SessionScreen: React.FC = () => {
         if (matched) {
           handleJoinClass(matched);
         } else {
+          setStreamEndedInfo(null);
           setActiveMeeting({
             id: `room-${Date.now()}`,
             roomCode: code,
@@ -641,16 +645,17 @@ export const SessionScreen: React.FC = () => {
           } catch {}
           peerConnectionsRef.current.delete(leavingPeerId);
         }
-        setRemotePeerInfo(prev => {
-          if (prev?.id === leavingPeerId) {
-            setRemoteStream(null);
-            setRemoteFrameUrl(null);
-            if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-            if (hostVideoRef.current && !isScreenSharing) hostVideoRef.current.srcObject = null;
-            return null;
-          }
-          return prev;
+        const peerName = payload.name || remotePeerInfo?.name || activeMeeting.instructorName || 'Remote Peer';
+        setStreamEndedInfo({
+          peerName,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
+        showToast(`⚠️ ${peerName} left the room. Stream ended.`, 'warning');
+        setRemotePeerInfo(null);
+        setRemoteStream(null);
+        setRemoteFrameUrl(null);
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+        if (hostVideoRef.current && !isScreenSharing) hostVideoRef.current.srcObject = null;
       })
       .on('broadcast', { event: 'webrtc_signal' }, async ({ payload }) => {
         if (!payload || payload.from === localClientId.current) return;
@@ -807,6 +812,7 @@ export const SessionScreen: React.FC = () => {
 
   const handleCreateAndStartRoom = (e: React.FormEvent) => {
     e.preventDefault();
+    setStreamEndedInfo(null);
     const topic = newRoomTopic.trim() || `${newRoomSkill} Live Interactive Masterclass`;
     setActiveMeeting({
       id: `room-${Date.now()}`,
@@ -1200,7 +1206,11 @@ export const SessionScreen: React.FC = () => {
         realtimeChannelRef.current.send({
           type: 'broadcast',
           event: 'peer_leave',
-          payload: { from: localClientId.current },
+          payload: {
+            from: localClientId.current,
+            name: currentUser.name,
+            avatar: currentUser.avatar,
+          },
         });
       } catch {}
     }
@@ -1664,6 +1674,48 @@ export const SessionScreen: React.FC = () => {
                       <span>Alex Rivera (Simulated Peer Video Feed)</span>
                     </div>
                   </div>
+                ) : streamEndedInfo ? (
+                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-950 via-rose-950/40 to-slate-950 flex-col gap-4 p-6 text-center animate-fade-in">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-rose-500/20 border-2 border-rose-500/50 flex items-center justify-center text-rose-400 shadow-2xl">
+                      <PhoneOff className="w-8 h-8 sm:w-10 sm:h-10 animate-pulse" />
+                    </div>
+                    <div className="space-y-1.5 max-w-md">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-mono-ledger font-bold">
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                        <span>STREAM ENDED</span>
+                      </div>
+                      <h3 className="font-display font-bold text-lg sm:text-xl text-white">
+                        {streamEndedInfo.peerName} left the session
+                      </h3>
+                      <p className="text-xs text-slate-400 font-mono-ledger">
+                        Live peer session disconnected at {streamEndedInfo.time}. You can take the micro-quiz to mint your proof or return to lobby.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                      <button
+                        onClick={() => setShowQuizModal(true)}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                      >
+                        <Award className="w-4 h-4" />
+                        <span>Take Quiz & Mint Block</span>
+                      </button>
+                      <button
+                        onClick={copyMeetLink}
+                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono-ledger font-bold text-xs border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Copy className="w-4 h-4 text-amber-400" />
+                        <span>Copy Room Link</span>
+                      </button>
+                      <button
+                        onClick={handleLeaveMeeting}
+                        className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                      >
+                        <PhoneOff className="w-4 h-4" />
+                        <span>Return to Lobby</span>
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3.5 p-4 text-center">
                     <img
@@ -1740,6 +1792,25 @@ export const SessionScreen: React.FC = () => {
                     <img src={remoteFrameUrl} alt="Remote Peer Camera" className="w-full h-full object-cover" />
                   ) : isSimulatedPeerActive ? (
                     <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900&auto=format&fit=crop&q=80" alt="Simulated Peer Video" className="w-full h-full object-cover" />
+                  ) : streamEndedInfo ? (
+                    <div className="text-center space-y-3 p-4 bg-gradient-to-b from-slate-900 to-rose-950/40 w-full h-full flex flex-col items-center justify-center animate-fade-in">
+                      <div className="w-12 h-12 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 mx-auto shadow-lg">
+                        <PhoneOff className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="inline-block px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono-ledger text-[10px] font-bold border border-rose-500/30">
+                          STREAM ENDED
+                        </div>
+                        <p className="text-xs font-bold text-white">{streamEndedInfo.peerName} disconnected</p>
+                        <p className="text-[10px] text-slate-400 font-mono-ledger">Ended at {streamEndedInfo.time}</p>
+                      </div>
+                      <button
+                        onClick={handleLeaveMeeting}
+                        className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer transition-all shadow-md active:scale-95"
+                      >
+                        Return to Lobby
+                      </button>
+                    </div>
                   ) : (
                     <div className="text-center space-y-2 p-2">
                       <img src={activeMeeting.instructorAvatar} alt={activeMeeting.instructorName} className="w-16 h-16 rounded-full object-cover border-2 border-amber-400 mx-auto" />
@@ -1754,8 +1825,8 @@ export const SessionScreen: React.FC = () => {
                     </div>
                   )}
                   <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-950/80 text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${remoteStream || remoteFrameUrl || isSimulatedPeerActive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
-                    <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Peer)</span>
+                    <span className={`w-2 h-2 rounded-full ${remoteStream || remoteFrameUrl || isSimulatedPeerActive ? 'bg-emerald-400 animate-ping' : streamEndedInfo ? 'bg-rose-500' : 'bg-amber-400'}`}></span>
+                    <span>{streamEndedInfo ? 'Stream Ended' : (remotePeerInfo?.name || activeMeeting.instructorName)} (Peer)</span>
                   </div>
                 </div>
 
