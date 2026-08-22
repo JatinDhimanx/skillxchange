@@ -185,15 +185,9 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onNavigate
       {/* ── Page Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4 pb-2 border-b border-slate-200/80">
         <div className="space-y-1">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="font-display font-bold text-2xl sm:text-3xl text-slate-900">
-              My Learning Dashboard
-            </h1>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-mono-ledger font-bold border border-emerald-200">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-              Level {userLevel} • {currentLevelTitle}
-            </span>
-          </div>
+          <h1 className="font-display font-bold text-2xl sm:text-3xl text-slate-900">
+            My Learning Dashboard
+          </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-sans">
             Your personal progress, learning trajectories, verified proofs, and community standings.
           </p>
@@ -302,10 +296,11 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onNavigate
 
       {/* ── TAB 1: OVERVIEW & ACTIVE GOALS ───────────────────────────────── */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Active Learning Goals with Interactive Updates (7 Cols) */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="p-6 sm:p-7 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-6">
+        <div className="space-y-8">
+          {/* Top Row: Goals Trajectory + Teaching/Learning Balance */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Active Learning Goals with Interactive Updates (8 Cols) */}
+            <div className="lg:col-span-8 p-6 sm:p-7 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-6">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 flex-wrap gap-2">
                 <div>
                   <h2 className="font-display font-bold text-lg text-slate-900 flex items-center gap-2">
@@ -313,7 +308,7 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onNavigate
                     Learning Goals Trajectory
                   </h2>
                   <p className="text-xs text-slate-500 font-sans mt-0.5">
-                    Click any mastery percentage to record live progress into the Supabase database.
+                    Click any mastery percentage below to save real-time progress to database.
                   </p>
                 </div>
                 <span className="text-[11px] font-mono-ledger font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
@@ -398,69 +393,87 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onNavigate
               )}
             </div>
 
-            {/* Teaching vs Learning Balance Ratio */}
-            <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-4">
-              <h3 className="font-display font-bold text-sm text-slate-900 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-600" />
-                Teaching vs Learning Balance Ratio
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1 font-sans">
-                    <span className="text-amber-800 font-bold">Teaching — {currentUser.skillsToTeach.length} offerings</span>
-                    <span className="font-mono-ledger text-slate-500">{currentUser.teachingHours} hrs</span>
+            {/* Teaching vs Learning Balance Ratio (4 Cols) */}
+            <div className="lg:col-span-4 p-6 sm:p-7 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-6 flex flex-col justify-between">
+              <div className="space-y-4">
+                <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-emerald-600" />
+                  Barter Balance Ratio
+                </h3>
+                <p className="text-xs text-slate-500 font-sans">
+                  Symmetric balance between giving knowledge and receiving mentorship.
+                </p>
+
+                <div className="space-y-4 pt-2">
+                  <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/70 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-sans">
+                      <span className="text-amber-900 font-bold">Teaching Offerings</span>
+                      <span className="font-mono-ledger font-bold text-amber-800">{currentUser.teachingHours} hrs</span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-amber-200/70 overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, Math.max(15, currentUser.teachingHours * 10))}%` }} />
+                    </div>
+                    <p className="text-[10px] text-amber-700 font-mono-ledger">{currentUser.skillsToTeach.length} verified skills published</p>
                   </div>
-                  <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, Math.max(15, currentUser.teachingHours * 8))}%` }} />
+
+                  <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-sans">
+                      <span className="text-emerald-900 font-bold">Learning Trajectory</span>
+                      <span className="font-mono-ledger font-bold text-emerald-800">{currentUser.learningHours} hrs</span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-emerald-200/70 overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, Math.max(15, currentUser.learningHours * 10))}%` }} />
+                    </div>
+                    <p className="text-[10px] text-emerald-700 font-mono-ledger">{currentUser.skillsToLearn.length} active learning goals</p>
                   </div>
                 </div>
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1 font-sans">
-                    <span className="text-emerald-800 font-bold">Learning — {currentUser.skillsToLearn.length} goals</span>
-                    <span className="font-mono-ledger text-slate-500">{currentUser.learningHours} hrs</span>
-                  </div>
-                  <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, Math.max(15, currentUser.learningHours * 8))}%` }} />
-                  </div>
-                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 text-center">
+                <p className="text-[11px] text-slate-500 font-mono-ledger">
+                  Trust Score: <span className="font-bold text-emerald-700">{currentUser.trustScore.overallScore}/100</span> (Identity Verified)
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Live Community Leaderboard (5 Cols) */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="p-6 sm:p-7 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-5">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <h2 className="font-display font-bold text-lg text-slate-900 flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-amber-500" />
-                    Community Standings
-                  </h2>
-                  <p className="text-xs text-slate-500 font-sans mt-0.5">
-                    Live Supabase database ranking.
-                  </p>
-                </div>
-                <span className="text-[10px] font-mono-ledger text-emerald-800 uppercase font-bold bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                  Global Net
+          {/* Full-Width Community Standings Leaderboard */}
+          <div className="w-full p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 flex-wrap gap-3">
+              <div>
+                <h2 className="font-display font-bold text-xl text-slate-900 flex items-center gap-2.5">
+                  <Trophy className="w-6 h-6 text-amber-500" />
+                  Live Community Leaderboard & Standings
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 font-sans mt-0.5">
+                  All registered members ranked dynamically in real time from the Supabase database.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono-ledger text-emerald-800 uppercase font-bold bg-emerald-50 px-3.5 py-1.5 rounded-full border border-emerald-200">
+                  {sortedLeaderboard.length} Active Peers
                 </span>
               </div>
+            </div>
 
-              <div className="space-y-2.5">
-                {sortedLeaderboard.slice(0, 7).map((u, index) => {
-                  const rank = index + 1;
-                  const isMe = u.id === currentUser.id;
-                  return (
-                    <div
-                      key={u.id || index}
-                      className={`flex items-center gap-3.5 p-3.5 rounded-2xl transition-all ${
-                        isMe
-                          ? 'bg-emerald-50/90 border-2 border-emerald-500/90 shadow-xs'
-                          : 'bg-slate-50/70 border border-slate-200/70 hover:bg-white'
-                      }`}
-                    >
-                      {/* Podium Badges */}
+            {/* Full-Width Leaderboard Table Grid */}
+            <div className="space-y-3">
+              {sortedLeaderboard.map((u, index) => {
+                const rank = index + 1;
+                const isMe = u.id === currentUser.id;
+                return (
+                  <div
+                    key={u.id || index}
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl transition-all border ${
+                      isMe
+                        ? 'bg-emerald-50/90 border-2 border-emerald-500/90 shadow-xs'
+                        : 'bg-slate-50/70 border-slate-200/70 hover:bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    {/* Left: Rank, Avatar, Details */}
+                    <div className="flex items-center gap-4 min-w-0">
                       <span
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-display font-black text-xs shrink-0 ${
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-display font-black text-sm shrink-0 ${
                           rank === 1
                             ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-xs'
                             : rank === 2
@@ -476,34 +489,58 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onNavigate
                       <img
                         src={u.avatar}
                         alt={u.name}
-                        className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0"
+                        className="w-11 h-11 rounded-2xl object-cover border border-slate-200 shrink-0"
                       />
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-bold text-slate-900 truncate">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-display font-bold text-sm text-slate-900 truncate">
                             {u.name}
                           </p>
                           {isMe && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-600 text-white font-mono-ledger font-bold">
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-600 text-white font-mono-ledger font-bold">
                               You
                             </span>
                           )}
+                          {u.collegeVerified && (
+                            <span className="text-[9px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono-ledger font-bold">
+                              {u.college || 'Verified Student'}
+                            </span>
+                          )}
                         </div>
-                        <p className="text-[10px] font-mono-ledger text-slate-500">
-                          {u.teachingHours || 0} hrs taught • {u.streakDays || 1}d streak
+                        <p className="text-xs text-slate-500 font-sans truncate">
+                          {u.headline || 'Skill Exchange Member'}
                         </p>
                       </div>
+                    </div>
 
-                      <div className="text-right shrink-0">
-                        <span className="text-xs font-mono-ledger font-black text-emerald-700">
+                    {/* Right: Metrics Strip (Teaching, Streak, Credits, XP) */}
+                    <div className="flex items-center gap-6 sm:gap-8 justify-between sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-200/60 shrink-0">
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-mono-ledger uppercase text-slate-400 block font-bold">Teaching</span>
+                        <span className="text-xs font-mono-ledger font-bold text-slate-700">{u.teachingHours || 0} hrs</span>
+                      </div>
+
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-mono-ledger uppercase text-slate-400 block font-bold">Streak</span>
+                        <span className="text-xs font-mono-ledger font-bold text-orange-600">🔥 {u.streakDays || 1}d</span>
+                      </div>
+
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-mono-ledger uppercase text-slate-400 block font-bold">Balance</span>
+                        <span className="text-xs font-mono-ledger font-bold text-slate-900">{u.creditsBalance?.toFixed(1) || '5.0'} CR</span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-[10px] font-mono-ledger uppercase text-slate-400 block font-bold">XP Score</span>
+                        <span className="text-sm font-mono-ledger font-black text-emerald-700">
                           {(u.xpPoints || 100).toLocaleString()} XP
                         </span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
