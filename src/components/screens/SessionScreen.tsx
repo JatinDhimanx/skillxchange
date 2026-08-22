@@ -1155,6 +1155,40 @@ export const SessionScreen: React.FC = () => {
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
     }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.close();
+      } catch {}
+      peerConnectionRef.current = null;
+    }
+    targetPeerIdRef.current = null;
+
+    setMediaStream(null);
+    setIsCameraActive(false);
+    setRemoteStream(null);
+    setRemoteFrameUrl(null);
+    setRemotePeerInfo(null);
+    setIsSimulatedPeerActive(false);
+
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+    if (hostVideoRef.current) {
+      hostVideoRef.current.srcObject = null;
+    }
+
+    // Clean URL query param if present
+    if (typeof window !== 'undefined' && window.location.search.includes('room=')) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     setSessionView('lobby');
     endLiveSession();
     showToast(`Left meeting room [${activeMeeting.roomCode}].`, 'info');
