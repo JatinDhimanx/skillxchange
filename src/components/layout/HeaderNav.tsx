@@ -123,12 +123,9 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
           {/* ── BRAND ─────────────────────────────── */}
           <div
             onClick={() => handleTabClick('home')}
-            className="flex items-center gap-2 cursor-pointer select-none shrink-0 group"
+            className="flex items-center cursor-pointer select-none shrink-0 group"
           >
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-display font-black text-xs sm:text-sm shadow-sm shrink-0 group-hover:bg-slate-800 transition-colors">
-              SX
-            </div>
-            <span className="font-display font-bold text-base sm:text-lg text-slate-900 tracking-tight whitespace-nowrap">
+            <span className="font-display font-black text-lg sm:text-xl text-slate-900 tracking-tight whitespace-nowrap group-hover:opacity-90 transition-opacity">
               Skill<span className="text-amber-600">X</span>change
             </span>
           </div>
