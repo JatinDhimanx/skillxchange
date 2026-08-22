@@ -42,6 +42,9 @@ import {
   removeTeachingSkillFromDB,
   addLearningGoalToDB,
   removeLearningGoalFromDB,
+  fetchCreditTransactionsFromDB,
+  recordCreditTransactionInDB,
+  updateUserCreditBalanceInDB,
 } from '../lib/supabase/services';
 import {
   signUpUser,
@@ -435,12 +438,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Hydrate all database data
   const hydrateAllData = async (user: UserProfile) => {
     try {
-      const [dbProfiles, dbSkills, dbBounties, dbLedger, dbNotes] = await Promise.all([
+      const [dbProfiles, dbSkills, dbBounties, dbLedger, dbNotes, dbTxns] = await Promise.all([
         fetchProfilesFromDB(),
         fetchSkillsFromDB(),
         fetchBountiesFromDB(),
         fetchCredentialLedgerFromDB(),
         fetchNotebookEntriesFromDB(user.id),
+        fetchCreditTransactionsFromDB(user.id),
       ]);
 
       if (dbProfiles && dbProfiles.length > 0) {
@@ -475,23 +479,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setNotebookEntries([]);
       }
 
-      // User specific private transaction history
-      const txKey = `skillxchange_txns_${user.id}`;
-      const savedTx = localStorage.getItem(txKey);
-      if (savedTx) {
-        try {
-          setTransactions(JSON.parse(savedTx));
-        } catch {}
+      // Backend-connected dynamic transaction history & credit accounting
+      if (dbTxns && dbTxns.length > 0) {
+        setTransactions(dbTxns);
+        const earned = dbTxns.filter(t => t.delta > 0).reduce((sum, t) => sum + t.delta, 0);
+        const spent = Math.abs(dbTxns.filter(t => t.delta < 0).reduce((sum, t) => sum + t.delta, 0));
+        const latestBalance = dbTxns[0]?.balance ?? user.creditsBalance;
+
+        setCurrentUser(prev => ({
+          ...prev,
+          creditsBalance: latestBalance,
+          totalCreditsEarned: earned,
+          totalCreditsSpent: spent,
+        }));
       } else {
-        setTransactions([
-          {
-            id: `TXN-${user.id.slice(-4)}-01`,
-            date: new Date().toISOString().split('T')[0],
-            desc: 'Genesis Barter Credit Grant',
-            delta: +user.creditsBalance,
-            balance: user.creditsBalance,
-          },
-        ]);
+        // Fallback local initial state if no transactions yet in DB
+        const txKey = `skillxchange_txns_${user.id}`;
+        const savedTx = localStorage.getItem(txKey);
+        if (savedTx) {
+          try {
+            const parsed = JSON.parse(savedTx);
+            setTransactions(parsed);
+            const earned = parsed.filter((t: any) => t.delta > 0).reduce((sum: number, t: any) => sum + t.delta, 0);
+            const spent = Math.abs(parsed.filter((t: any) => t.delta < 0).reduce((sum: number, t: any) => sum + t.delta, 0));
+            setCurrentUser(prev => ({
+              ...prev,
+              totalCreditsEarned: earned || prev.totalCreditsEarned,
+              totalCreditsSpent: spent || prev.totalCreditsSpent,
+            }));
+          } catch {}
+        } else {
+          const initialTx = [
+            {
+              id: `TXN-${user.id.slice(-4)}-01`,
+              date: new Date().toISOString().split('T')[0],
+              desc: 'Genesis Barter Credit Grant',
+              delta: +user.creditsBalance,
+              balance: user.creditsBalance,
+            },
+          ];
+          setTransactions(initialTx);
+        }
       }
 
       // User specific private notifications
@@ -1481,7 +1509,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       generateNewCredentialBlock(currentUser.name, currentUser.id, proof.skillName, mastery);
       setActiveQuizProof(null);
-      showToast(`Micro-Quiz Verified! ${mastery}% scored & minted to Credential Ledger. 📜`, 'success');
+
+      if (mastery >= 70) {
+        const rewardCredit = 1.0;
+        const newBalance = Number((currentUser.creditsBalance + rewardCredit).toFixed(1));
+        setCurrentUser(prev => ({
+          ...prev,
+          creditsBalance: newBalance,
+          totalCreditsEarned: prev.totalCreditsEarned + rewardCredit,
+        }));
+        const newTxn: LedgerTransaction = {
+          id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
+          date: new Date().toISOString().split('T')[0],
+          desc: `Micro-Quiz Mastery Reward: ${proof.skillName}`,
+          delta: +rewardCredit,
+          balance: newBalance,
+        };
+        setTransactions(prev => [newTxn, ...prev]);
+        recordCreditTransactionInDB(
+          currentUser.id,
+          `Micro-Quiz Mastery Reward: ${proof.skillName}`,
+          +rewardCredit,
+          newBalance
+        );
+        showToast(`Micro-Quiz Verified! ${mastery}% scored. +1.0 CR reward added to wallet! 📜✨`, 'success');
+      } else {
+        showToast(`Micro-Quiz submitted with ${mastery}%. Minimum 70% required for credit reward.`, 'info');
+      }
+
       return { score, total, passed: mastery >= 70 };
     }
     return { score: 3, total: 3, passed: true };
@@ -1495,6 +1550,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const newBalance = Number((currentUser.creditsBalance - amount).toFixed(1));
+    const recipientUser = allUsers.find(u => u.id === toUserId);
+    const recipientNewBalance = recipientUser ? Number((recipientUser.creditsBalance + amount).toFixed(1)) : amount;
 
     setAllUsers(prev =>
       prev.map(u => {
@@ -1502,7 +1559,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return { ...u, creditsBalance: newBalance, totalCreditsSpent: u.totalCreditsSpent + amount };
         }
         if (u.id === toUserId) {
-          return { ...u, creditsBalance: Number((u.creditsBalance + amount).toFixed(1)), totalCreditsEarned: u.totalCreditsEarned + amount };
+          return { ...u, creditsBalance: recipientNewBalance, totalCreditsEarned: u.totalCreditsEarned + amount };
         }
         return u;
       })
@@ -1522,6 +1579,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       balance: newBalance,
     };
     setTransactions(prev => [newTxn, ...prev]);
+
+    // Backend sync
+    recordCreditTransactionInDB(
+      currentUser.id,
+      `Transfer to ${recipientUser?.name || 'peer'}: ${reason}`,
+      -amount,
+      newBalance
+    );
+
+    if (toUserId) {
+      recordCreditTransactionInDB(
+        toUserId,
+        `Received from ${currentUser.name}: ${reason}`,
+        +amount,
+        recipientNewBalance
+      );
+    }
 
     showToast(`Transferred ${amount} CR. New Balance: ${newBalance.toFixed(1)} CR`, 'success');
   };
@@ -1574,6 +1648,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString().split('T')[0],
       bids: [],
     };
+    if (budgetCredits > 0) {
+      if (currentUser.creditsBalance < budgetCredits) {
+        showToast(`Insufficient barter credits for bounty budget! (Available: ${currentUser.creditsBalance.toFixed(1)} CR)`, 'warning');
+        return;
+      }
+      const newBalance = Number((currentUser.creditsBalance - budgetCredits).toFixed(1));
+      setCurrentUser(prev => ({
+        ...prev,
+        creditsBalance: newBalance,
+        totalCreditsSpent: prev.totalCreditsSpent + budgetCredits,
+      }));
+      const newTxn: LedgerTransaction = {
+        id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toISOString().split('T')[0],
+        desc: `Escrow Lock for Bounty: ${title}`,
+        delta: -budgetCredits,
+        balance: newBalance,
+      };
+      setTransactions(prev => [newTxn, ...prev]);
+      recordCreditTransactionInDB(
+        currentUser.id,
+        `Escrow Lock for Bounty: ${title}`,
+        -budgetCredits,
+        newBalance
+      );
+    }
+
     setBounties(prev => [newBounty, ...prev]);
     createBountyInDB(newBounty);
     showToast('Learning bounty posted! Instructors are being alerted.', 'success');
@@ -1738,7 +1839,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const releaseEscrow = () => {
     if (activeSession) {
-      setActiveSession(prev => prev ? { ...prev, escrowStatus: 'learner_confirmed_released' } : null);
+      setActiveSession(prev => (prev ? { ...prev, escrowStatus: 'learner_confirmed_released' } : null));
+      const isTeacher = currentUser.name === activeSession.teacherName;
+      if (isTeacher) {
+        const reward = 1.4;
+        const newBalance = Number((currentUser.creditsBalance + reward).toFixed(1));
+        setCurrentUser(prev => ({
+          ...prev,
+          creditsBalance: newBalance,
+          totalCreditsEarned: prev.totalCreditsEarned + reward,
+        }));
+        const newTxn: LedgerTransaction = {
+          id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
+          date: new Date().toISOString().split('T')[0],
+          desc: `Escrow Settlement: ${activeSession.title}`,
+          delta: +reward,
+          balance: newBalance,
+        };
+        setTransactions(prev => [newTxn, ...prev]);
+        recordCreditTransactionInDB(
+          currentUser.id,
+          `Escrow Settlement: ${activeSession.title}`,
+          +reward,
+          newBalance
+        );
+      }
       showToast('Escrow released! 1.4 Credits transferred to teacher wallet.', 'success');
     }
   };

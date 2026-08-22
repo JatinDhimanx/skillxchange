@@ -506,3 +506,70 @@ export async function saveChatMessageToDB(
     return false;
   }
 }
+
+// ============================================================================
+// 7. CREDIT TRANSACTIONS & WALLET SERVICE
+// ============================================================================
+export async function fetchCreditTransactionsFromDB(userId: string): Promise<LedgerTransaction[] | null> {
+  if (!isSupabaseConfigured || !supabase || !userId || userId === 'guest') return null;
+  try {
+    const { data, error } = await supabase
+      .from('credit_transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return null;
+
+    return data.map((t: any) => ({
+      id: t.id,
+      date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      desc: t.description,
+      delta: Number(t.delta),
+      balance: Number(t.balance),
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function recordCreditTransactionInDB(
+  userId: string,
+  desc: string,
+  delta: number,
+  balance: number
+): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase || !userId || userId === 'guest') return false;
+  try {
+    // 1. Insert transaction record
+    const { error: txError } = await supabase.from('credit_transactions').insert({
+      user_id: userId,
+      description: desc,
+      delta: delta,
+      balance: balance,
+    });
+
+    // 2. Update profile credit balance
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ credit_balance: balance, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+
+    return !txError && !profileError;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateUserCreditBalanceInDB(userId: string, newBalance: number): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase || !userId || userId === 'guest') return false;
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ credit_balance: newBalance, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
