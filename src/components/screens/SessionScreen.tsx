@@ -440,7 +440,9 @@ export const SessionScreen: React.FC = () => {
 
     const initPeerConnection = (targetClientId: string) => {
       if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
+        try {
+          peerConnectionRef.current.close();
+        } catch {}
         peerConnectionRef.current = null;
       }
 
@@ -450,7 +452,9 @@ export const SessionScreen: React.FC = () => {
       // Add local media tracks if active
       if (mediaStream) {
         mediaStream.getTracks().forEach(track => {
-          pc.addTrack(track, mediaStream);
+          try {
+            pc.addTrack(track, mediaStream);
+          } catch {}
         });
       }
 
@@ -488,17 +492,18 @@ export const SessionScreen: React.FC = () => {
       return pc;
     };
 
-    channel
-      .on('broadcast', { event: 'peer_join' }, async ({ payload }) => {
-        if (!payload || payload.from === localClientId.current) return;
-        setRemotePeerInfo({
-          id: payload.from,
-          name: payload.name || 'Remote Peer',
-          avatar: payload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-        });
-        showToast(`${payload.name || 'Second Device'} joined! Establishing live video link...`, 'info');
+    const handlePeerArrived = async (peerPayload: any) => {
+      if (!peerPayload || peerPayload.from === localClientId.current) return;
+      setRemotePeerInfo({
+        id: peerPayload.from,
+        name: peerPayload.name || 'Remote Peer',
+        avatar: peerPayload.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+      });
 
-        const pc = initPeerConnection(payload.from);
+      // Deterministic initiator: the client with larger ID creates the offer
+      const shouldInitiate = localClientId.current > peerPayload.from;
+      if (shouldInitiate) {
+        const pc = initPeerConnection(peerPayload.from);
         try {
           const offer = await pc.createOffer({
             offerToReceiveAudio: true,
@@ -511,7 +516,7 @@ export const SessionScreen: React.FC = () => {
             payload: {
               type: 'sdp_offer',
               from: localClientId.current,
-              to: payload.from,
+              to: peerPayload.from,
               sdp: offer,
               senderName: currentUser.name,
               senderAvatar: currentUser.avatar,
@@ -520,6 +525,15 @@ export const SessionScreen: React.FC = () => {
         } catch (err) {
           console.error('Failed to create offer:', err);
         }
+      }
+    };
+
+    channel
+      .on('broadcast', { event: 'peer_join' }, async ({ payload }) => {
+        handlePeerArrived(payload);
+      })
+      .on('broadcast', { event: 'peer_ping' }, async ({ payload }) => {
+        handlePeerArrived(payload);
       })
       .on('broadcast', { event: 'webrtc_signal' }, async ({ payload }) => {
         if (!payload || payload.from === localClientId.current) return;
@@ -528,7 +542,7 @@ export const SessionScreen: React.FC = () => {
         if (payload.type === 'sdp_offer') {
           setRemotePeerInfo({
             id: payload.from,
-            name: payload.senderName || 'Instructor',
+            name: payload.senderName || 'Peer',
             avatar: payload.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
           });
           const pc = initPeerConnection(payload.from);
@@ -602,10 +616,28 @@ export const SessionScreen: React.FC = () => {
         }
       });
 
+    // Heartbeat to continuously discover peers joining on second device
+    const pingInterval = setInterval(() => {
+      if (channel) {
+        channel.send({
+          type: 'broadcast',
+          event: 'peer_ping',
+          payload: {
+            from: localClientId.current,
+            name: currentUser.name,
+            avatar: currentUser.avatar,
+          },
+        });
+      }
+    }, 2500);
+
     return () => {
+      clearInterval(pingInterval);
       channel.unsubscribe();
       if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
+        try {
+          peerConnectionRef.current.close();
+        } catch {}
         peerConnectionRef.current = null;
       }
     };

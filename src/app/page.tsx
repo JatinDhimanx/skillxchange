@@ -36,8 +36,20 @@ const MainAppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<ScreenTab>('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+  // Auto-detect room link on page load / second device
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get('room');
+      if (room) {
+        setCurrentTab('session');
+      }
+    }
+  }, []);
+
   const handleSelectTab = (tab: ScreenTab) => {
-    if (tab !== 'home' && !isAuthenticated) {
+    // Allow guest to access session if joining via meet room, otherwise require auth
+    if (tab !== 'home' && tab !== 'session' && !isAuthenticated) {
       openAuthModal('signup');
       return;
     }
@@ -45,7 +57,7 @@ const MainAppContent: React.FC = () => {
   };
 
   const renderScreen = () => {
-    if (currentTab !== 'home' && !isAuthenticated) {
+    if (currentTab !== 'home' && currentTab !== 'session' && !isAuthenticated) {
       return <HomeScreen onNavigate={handleSelectTab} />;
     }
 
