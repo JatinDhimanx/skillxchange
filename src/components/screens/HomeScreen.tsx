@@ -161,8 +161,6 @@ import { AISkillDiscoveryModal } from '../innovations/AISkillDiscoveryModal';
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   const { allUsers, currentUser, openChatWithPeer, isAuthenticated, openAuthModal } = useApp();
 
-  const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
-
   // Animated counters
   const [stats, setStats] = useState({ exchanges: 0, credits: 0, chains: 0, escrowRate: 0 });
   const [hasCounted, setHasCounted] = useState(false);
@@ -355,20 +353,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         )}
 
         {/* CTA buttons */}
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-          {/* Primary AI Skill Discovery Button */}
-          <button
-            onClick={() => setIsDiscoveryModalOpen(true)}
-            className="px-7 py-3 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold text-sm shadow-lg shadow-amber-500/25 transition-all flex items-center gap-2.5 active:scale-95 whitespace-nowrap cursor-pointer hover:shadow-xl hover:shadow-amber-500/30"
-          >
-            <Sparkles className="w-4 h-4 text-amber-100 animate-spin" style={{ animationDuration: '3s' }} />
-            <span>🚀 Start Skill Discovery</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/20 text-white font-mono-ledger border border-white/30">
-              AI CHAT-13
-            </span>
-          </button>
-
-          {isAuthenticated && currentUser.id !== 'guest' ? (
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-1">          {isAuthenticated && currentUser.id !== 'guest' ? (
             <>
               <button
                 onClick={() => onNavigate('matches')}
@@ -833,13 +818,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           </div>
         </div>
       </section>
-
-      {/* AI Skill Discovery Modal (CHAT-13) */}
-      <AISkillDiscoveryModal
-        isOpen={isDiscoveryModalOpen}
-        onClose={() => setIsDiscoveryModalOpen(false)}
-        onNavigateToMatches={() => onNavigate('matches')}
-      />
     </div>
   );
 };

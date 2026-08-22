@@ -20,10 +20,11 @@ import { SecondBrainNotebook } from '../components/innovations/SecondBrainNotebo
 import { CredentialLedger } from '../components/innovations/CredentialLedger';
 import { SoftSkillsLab } from '../components/innovations/SoftSkillsLab';
 import { AISkillDiscoveryView } from '../components/innovations/AISkillDiscoveryView';
+import { AISkillDiscoveryModal } from '../components/innovations/AISkillDiscoveryModal';
 import { CollegeHub } from '../components/community/CollegeHub';
 import { PeerChatDrawer } from '../components/chat/PeerChatDrawer';
 import { AuthModal } from '../components/auth/AuthModal';
-import { PhoneOff, Video } from 'lucide-react';
+import { PhoneOff, Video, Sparkles, Bot } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const {
@@ -42,6 +43,7 @@ const MainAppContent: React.FC = () => {
   } = useApp();
   const [currentTab, setCurrentTab] = useState<ScreenTab>('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isGlobalDiscoveryOpen, setIsGlobalDiscoveryOpen] = useState(false);
 
   // Sync activeTab from AppContext
   React.useEffect(() => {
@@ -251,6 +253,21 @@ const MainAppContent: React.FC = () => {
       {showOnboarding && (
         <OnboardingModal onComplete={() => setShowOnboarding(false)} />
       )}
+
+      {/* Global AI Skill Discovery FAB */}
+      <button
+        onClick={() => setIsGlobalDiscoveryOpen(true)}
+        className="fixed bottom-6 right-6 z-[60] flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-full shadow-lg hover:shadow-orange-500/40 hover:-translate-y-1 transition-all group"
+      >
+        <Sparkles className="w-6 h-6 text-white group-hover:rotate-12 transition-transform" />
+      </button>
+
+      {/* Global AI Skill Discovery Modal */}
+      <AISkillDiscoveryModal
+        isOpen={isGlobalDiscoveryOpen}
+        onClose={() => setIsGlobalDiscoveryOpen(false)}
+        onNavigateToMatches={() => handleSelectTab('matches')}
+      />
     </div>
   );
 };

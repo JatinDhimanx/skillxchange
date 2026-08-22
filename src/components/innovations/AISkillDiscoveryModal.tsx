@@ -344,9 +344,8 @@ export const AISkillDiscoveryModal: React.FC<AISkillDiscoveryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-3xl rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Top Header */}
+    <div className="fixed bottom-24 right-6 z-[70] w-[calc(100vw-3rem)] sm:w-[450px] h-[600px] max-h-[calc(100vh-8rem)] bg-white rounded-3xl shadow-2xl border-2 border-amber-500/20 flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 fade-in duration-300 origin-bottom-right">
+      {/* Top Header */}
         <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-amber-950 text-white flex items-center justify-between border-b border-slate-700/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shadow-sm">
@@ -621,7 +620,6 @@ export const AISkillDiscoveryModal: React.FC<AISkillDiscoveryModalProps> = ({
             <span>AI Guided • Real Supabase Matches</span>
           </span>
         </div>
-      </div>
     </div>
   );
 };
