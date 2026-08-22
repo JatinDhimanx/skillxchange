@@ -640,6 +640,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const openChatWithPeer = (peer: ChatPeerInfo) => {
+    if (!isAuthenticated) {
+      openAuthModal('signup');
+      return;
+    }
     setActiveChatPeer(peer);
     if (!peerConversations[peer.id]) {
       setPeerConversations(prev => ({

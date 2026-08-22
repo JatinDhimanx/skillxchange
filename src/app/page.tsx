@@ -24,14 +24,34 @@ import { PeerChatDrawer } from '../components/chat/PeerChatDrawer';
 import { AuthModal } from '../components/auth/AuthModal';
 
 const MainAppContent: React.FC = () => {
-  const { toastMessage, dismissToast, authModalOpen, authModalTab, closeAuthModal } = useApp();
+  const {
+    toastMessage,
+    dismissToast,
+    authModalOpen,
+    authModalTab,
+    closeAuthModal,
+    isAuthenticated,
+    openAuthModal,
+  } = useApp();
   const [currentTab, setCurrentTab] = useState<ScreenTab>('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+  const handleSelectTab = (tab: ScreenTab) => {
+    if (tab !== 'home' && !isAuthenticated) {
+      openAuthModal('signup');
+      return;
+    }
+    setCurrentTab(tab);
+  };
+
   const renderScreen = () => {
+    if (currentTab !== 'home' && !isAuthenticated) {
+      return <HomeScreen onNavigate={handleSelectTab} />;
+    }
+
     switch (currentTab) {
       case 'home':
-        return <HomeScreen onNavigate={setCurrentTab} />;
+        return <HomeScreen onNavigate={handleSelectTab} />;
       case 'matches':
         return <MatchesScreen />;
       case 'chains':
@@ -57,16 +77,16 @@ const MainAppContent: React.FC = () => {
       case 'profile':
         return <ProfileScreen />;
       case 'progress' as ScreenTab:
-        return <ProgressDashboard onNavigate={setCurrentTab} />;
+        return <ProgressDashboard onNavigate={handleSelectTab} />;
       default:
-        return <HomeScreen onNavigate={setCurrentTab} />;
+        return <HomeScreen onNavigate={handleSelectTab} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
       {/* Sticky Header Nav */}
-      <HeaderNav currentTab={currentTab} onSelectTab={setCurrentTab} />
+      <HeaderNav currentTab={currentTab} onSelectTab={handleSelectTab} />
 
       {/* SVI Skill Market Ticker */}
       <div className="sticky top-14 sm:top-16 z-40">
