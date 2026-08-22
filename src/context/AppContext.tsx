@@ -42,6 +42,7 @@ import {
   removeTeachingSkillFromDB,
   addLearningGoalToDB,
   removeLearningGoalFromDB,
+  updateLearningGoalProgressInDB,
   fetchCreditTransactionsFromDB,
   recordCreditTransactionInDB,
   updateUserCreditBalanceInDB,
@@ -135,6 +136,7 @@ export interface AppContextType {
   removeSkillToTeach: (skillId: string) => void;
   addSkillToLearn: (skillName: string, targetLevel: string, urgency: string) => void;
   removeSkillToLearn: (skillId: string) => void;
+  updateLearningGoalProgress: (skillId: string, progressPercent: number) => void;
 
   // Matching Engine
   candidates: MatchCandidate[];
@@ -1152,6 +1154,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Learning goal removed.', 'info');
   };
 
+  const updateLearningGoalProgress = (skillId: string, progressPercent: number) => {
+    const updatedLearn = currentUser.skillsToLearn.map(g =>
+      g.skillId === skillId ? { ...g, progressPercent } : g
+    );
+    const updatedUser = { ...currentUser, skillsToLearn: updatedLearn };
+    setCurrentUser(updatedUser);
+    setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updatedUser : u)));
+
+    updateLearningGoalProgressInDB(skillId, progressPercent);
+    showToast(`Learning goal progress updated to ${progressPercent}%! 📈`, 'success');
+  };
+
   // Live Study Room Real-Time Calling System
   const invitePeerToStudyRoom = (peerId: string, skillName: string, title?: string) => {
     const roomCode = `ROOM-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
@@ -1886,6 +1900,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeSkillToTeach,
         addSkillToLearn,
         removeSkillToLearn,
+        updateLearningGoalProgress,
         candidates,
         swapProposals,
         sendExchangeProposal,

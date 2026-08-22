@@ -188,6 +188,19 @@ export async function removeLearningGoalFromDB(goalId: string) {
   }
 }
 
+export async function updateLearningGoalProgressInDB(goalId: string, progressPercent: number) {
+  if (!isSupabaseConfigured || !supabase || !goalId) return false;
+  try {
+    const { error } = await supabase
+      .from('user_skills_learning')
+      .update({ progress_percent: progressPercent })
+      .eq('id', goalId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================================
 // 2. SKILLS DIRECTORY SERVICE
 // ============================================================================
