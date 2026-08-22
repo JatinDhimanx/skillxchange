@@ -67,6 +67,7 @@ export const MatchesScreen: React.FC = () => {
     startLiveSession,
     openChatWithPeer,
     showToast,
+    setActiveTab,
   } = useApp();
 
   // Search & Filter State
@@ -163,7 +164,7 @@ export const MatchesScreen: React.FC = () => {
     e.preventDefault();
     if (!proposalModalPeer) return;
 
-    sendExchangeProposal(proposalModalPeer.id, proposalMySkill, proposalTheirSkill);
+    sendExchangeProposal(proposalModalPeer.id, proposalMySkill, proposalTheirSkill, proposalNotes);
     showToast(`Bilateral barter proposal sent to ${proposalModalPeer.name}!`, 'success');
     confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
     setProposalModalPeer(null);
@@ -578,16 +579,17 @@ export const MatchesScreen: React.FC = () => {
                 <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
                   {/* Start Room Live */}
                   <button
-                    onClick={() =>
+                    onClick={() => {
                       startLiveSession(
                         `1-on-1 Exchange: ${candidate.skillLearnMatch.offeredByThem}`,
                         user.name,
                         currentUser.name,
                         candidate.skillLearnMatch.offeredByThem
-                      )
-                    }
+                      );
+                      setActiveTab('session');
+                    }}
                     className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
-                    title="Launch Live Google Meet Studio"
+                    title="Launch Live Study Room"
                   >
                     <Video className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>Study Room</span>
@@ -847,20 +849,38 @@ export const MatchesScreen: React.FC = () => {
             </div>
 
             {/* Direct Action Buttons */}
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
               <button
                 onClick={() => {
+                  const learnSkill = selectedPeerProfile.skillsToTeach?.[0]?.skillName || 'General Skills';
+                  setSelectedPeerProfile(null);
+                  startLiveSession(
+                    `1-on-1 Exchange: ${learnSkill}`,
+                    selectedPeerProfile.name,
+                    currentUser.name,
+                    learnSkill
+                  );
+                  setActiveTab('session');
+                }}
+                className="w-full sm:flex-1 py-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <Video className="w-4 h-4 text-emerald-600" />
+                <span>Study Room</span>
+              </button>
+              <button
+                onClick={() => {
+                  const teachSkill = selectedPeerProfile.skillsToTeach?.[0]?.skillName || 'Skills';
                   setSelectedPeerProfile(null);
                   openChatWithPeer({
                     id: selectedPeerProfile.id,
                     name: selectedPeerProfile.name,
                     avatar: selectedPeerProfile.avatar,
-                    skill: selectedPeerProfile.skillsToTeach[0]?.skillName || 'Skills',
+                    skill: teachSkill,
                     headline: selectedPeerProfile.headline,
                     rating: selectedPeerProfile.trustScore?.averageRating || 5.0,
                   });
                 }}
-                className="flex-1 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full sm:flex-1 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
               >
                 <MessageSquare className="w-4 h-4 text-amber-600" />
                 <span>Open Chat</span>
@@ -873,7 +893,7 @@ export const MatchesScreen: React.FC = () => {
                     handleOpenProposal(candidateObj);
                   }
                 }}
-                className="flex-1 py-3 rounded-2xl bg-slate-900 hover:bg-emerald-600 text-white font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full sm:flex-1 py-3 rounded-2xl bg-slate-900 hover:bg-emerald-600 text-white font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
               >
                 <Send className="w-4 h-4" />
                 <span>Propose Swap</span>

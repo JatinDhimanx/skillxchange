@@ -233,15 +233,39 @@ const BLANK_GUEST_USER: UserProfile = {
   name: 'New Peer',
   handle: '@guest',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  headline: 'Exploring SkillXchange',
-  bio: '',
-  location: 'India',
-  timezone: 'IST',
-  college: 'Peer Network',
-  collegeVerified: false,
-  languages: ['English'],
-  skillsToTeach: [],
-  skillsToLearn: [],
+  headline: 'Frontend Developer & Aspiring AI Practitioner',
+  bio: 'Passionate about building modern web applications. Eager to barter React mentoring for Python, Machine Learning, and Guitar practice!',
+  location: 'Bangalore, India',
+  timezone: 'IST (UTC+5:30)',
+  college: 'BMS Institute of Technology',
+  collegeVerified: true,
+  languages: ['English', 'Hindi'],
+  skillsToTeach: [
+    {
+      skillId: 'g-teach-1',
+      skillName: 'React & Next.js Fullstack',
+      category: 'Programming & AI',
+      level: 'Intermediate',
+      yearsExperience: 2,
+      verified: true,
+      verificationBadge: 'Verified Peer',
+      hourlyRateCredits: 1.0,
+      hourlyRateInr: 400,
+      proofCount: 2,
+    },
+  ],
+  skillsToLearn: [
+    {
+      skillId: 'g-learn-1',
+      skillName: 'Python & AI Engineering',
+      targetLevel: 'Intermediate',
+      urgency: 'urgent',
+      targetDateWeeks: 6,
+      currentRoadmapStep: 1,
+      totalRoadmapSteps: 6,
+      progressPercent: 20,
+    },
+  ],
   creditsBalance: 5.0,
   totalCreditsEarned: 0,
   totalCreditsSpent: 0,
@@ -249,17 +273,17 @@ const BLANK_GUEST_USER: UserProfile = {
   learningHours: 0,
   trustScore: {
     identityVerified: false,
-    skillVerifiedCount: 0,
+    skillVerifiedCount: 1,
     completedSessions: 0,
     attendanceRate: 100,
     averageRating: 5.0,
     cancellationRate: 0,
     responseRate: 100,
     accountAgeMonths: 0,
-    overallScore: 90,
+    overallScore: 92,
   },
   streakDays: 1,
-  xpPoints: 0,
+  xpPoints: 100,
   badges: [],
   role: 'user',
 };
@@ -268,7 +292,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('home');
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(USERS);
   const [currentUser, setCurrentUser] = useState<UserProfile>(BLANK_GUEST_USER);
   const [skills, setSkills] = useState<Skill[]>(INITIAL_SKILLS);
 
@@ -290,9 +314,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
 
       if (dbProfiles && dbProfiles.length > 0) {
-        setAllUsers(dbProfiles);
+        const combined = [...dbProfiles];
+        USERS.forEach(seed => {
+          if (!combined.some(p => p.id === seed.id || p.handle === seed.handle)) {
+            combined.push(seed);
+          }
+        });
+        setAllUsers(combined);
       } else {
-        setAllUsers([user]);
+        setAllUsers([user, ...USERS.filter(u => u.id !== user.id)]);
       }
 
       if (dbSkills && dbSkills.length > 0) {
@@ -664,7 +694,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ]);
 
         if (dbProfiles && dbProfiles.length > 0) {
-          setAllUsers(dbProfiles);
+          const combined = [...dbProfiles];
+          USERS.forEach(seed => {
+            if (!combined.some(p => p.id === seed.id || p.handle === seed.handle)) {
+              combined.push(seed);
+            }
+          });
+          setAllUsers(combined);
           setCurrentUser(dbProfiles[0]);
         }
         if (dbSkills && dbSkills.length > 0) setSkills(dbSkills);
@@ -728,44 +764,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'sent',
     };
 
+    // Optimistically append local message
     setPeerConversations(prev => ({
       ...prev,
       [peerId]: [...(prev[peerId] || []), userMsg],
     }));
 
-    // Async persist to Supabase
     saveChatMessageToDB(currentUser.id, peerId, userMsg);
 
-    // Simulate realistic typing and smart response
-    setIsPeerTyping(prev => ({ ...prev, [peerId]: true }));
+    // Simulated peer typing & response
+    setTimeout(() => {
+      setIsPeerTyping(prev => ({ ...prev, [peerId]: true }));
+    }, 800);
 
     setTimeout(() => {
       setIsPeerTyping(prev => ({ ...prev, [peerId]: false }));
+      const peerObj = allUsers.find(u => u.id === peerId);
+      const peerName = peerObj?.name || 'Peer';
+      const peerAvatar = peerObj?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
 
-      const peer = allUsers.find(u => u.id === peerId) || activeChatPeer;
-      const peerName = peer?.name || 'Peer';
-      const peerAvatar = peer?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
-      const lower = text.toLowerCase();
+      const replies = [
+        `Sounds great! I'd love to swap skills. When are you free for a hands-on session?`,
+        `Perfect! I've been looking for practical practice on this topic. Let's start a Study Room whenever you're ready!`,
+        `I checked your profile and trust score — looks awesome! Let's lock our barter proposal and get started.`,
+      ];
+      const randomReply = replies[Math.floor(Math.random() * replies.length)];
 
-      let replyText = `Awesome! I've marked this on my calendar. Looking forward to our session!`;
-      if (lower.includes('when') || lower.includes('time') || lower.includes('schedule') || lower.includes('free')) {
-        replyText = `I'm free this Tuesday and Thursday between 5 PM and 8 PM IST. Does 6:00 PM work for you?`;
-      } else if (lower.includes('study') || lower.includes('room') || lower.includes('live') || lower.includes('call') || lower.includes('join')) {
-        replyText = `Great! I'm ready. Click "Enter Live Study Room" at the top of our chat to open the room with collaborative whiteboard.`;
-      } else if (lower.includes('credit') || lower.includes('escrow') || lower.includes('pay') || lower.includes('cost')) {
-        replyText = `We can do a direct 1:1 barter (0 credits needed) or settle with +1.0 credit per hour into escrow!`;
-      } else if (lower.includes('python') || lower.includes('code') || lower.includes('numpy')) {
-        replyText = `Perfect! I'm eager to dive into NumPy vectorization and practical Pandas drills with you.`;
-      } else if (lower.includes('guitar') || lower.includes('music') || lower.includes('song')) {
-        replyText = `Can't wait to show you the alternating thumb bass pattern for Travis picking. You'll master it in one session!`;
-      }
-
-      const replyMsg: PeerChatMessage = {
-        id: `msg-${Date.now() + 1}`,
+      const peerMsg: PeerChatMessage = {
+        id: `msg-resp-${Date.now()}`,
         senderId: peerId,
         senderName: peerName,
         senderAvatar: peerAvatar,
-        text: replyText,
+        text: randomReply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isMe: false,
         status: 'read',
@@ -773,22 +803,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setPeerConversations(prev => ({
         ...prev,
-        [peerId]: [...(prev[peerId] || []), replyMsg],
+        [peerId]: [...(prev[peerId] || []), peerMsg],
       }));
-
-      // Async persist reply to Supabase
-      saveChatMessageToDB(peerId, currentUser.id, replyMsg);
-
-      // If chat is currently closed, fire a toast & notification
-      if (!activeChatPeer || activeChatPeer.id !== peerId) {
-        addNotification(`New message from ${peerName}`, replyText, 'match');
-      }
-    }, 1100);
+    }, 2400);
   };
 
   const clearPeerChat = (peerId: string) => {
-    setPeerConversations(prev => ({ ...prev, [peerId]: [] }));
-    showToast('Chat history cleared.', 'info');
+    setPeerConversations(prev => {
+      const next = { ...prev };
+      delete next[peerId];
+      return next;
+    });
+    showToast('Conversation cleared.', 'info');
   };
 
   const switchUser = (userId: string) => {
@@ -797,6 +823,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentUser(user);
       showToast(`Switched active persona to ${user.name} (${user.handle})`, 'info');
     }
+  };
+
+  // Profile Updates
+  const updateCurrentUserBio = (bio: string) => {
+    const updated = { ...currentUser, bio };
+    setCurrentUser(updated);
+    setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updated : u)));
+    updateProfileInDB(currentUser.id, { bio });
+    showToast('Bio updated successfully!', 'success');
+  };
+
+  const updateCurrentUserHeadline = (headline: string) => {
+    const updated = { ...currentUser, headline };
+    setCurrentUser(updated);
+    setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updated : u)));
+    updateProfileInDB(currentUser.id, { headline });
+    showToast('Headline updated successfully!', 'success');
   };
 
   const updateCurrentUserProfile = (bio: string, headline: string) => {
@@ -865,26 +908,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Learning goal removed.', 'info');
   };
 
-  // Dynamic Matching Engine
+  // Dynamic Matching Engine with intelligent token and substring matching
   const candidates = useMemo<MatchCandidate[]>(() => {
     const otherUsers = allUsers.filter(u => u.id !== currentUser.id && u.role !== 'admin');
-    const mySkillsToLearn = currentUser.skillsToLearn.map(s => s.skillName.toLowerCase());
+    const mySkillsToLearn = currentUser.skillsToLearn || [];
+    const mySkillsToTeach = currentUser.skillsToTeach || [];
+
+    const normalize = (str: string) =>
+      str
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]/g, ' ')
+        .split(/\s+/)
+        .filter(t => t.length > 2);
+
+    const isMatch = (skillA: string, skillB: string) => {
+      const a = skillA.toLowerCase();
+      const b = skillB.toLowerCase();
+      if (a === b || a.includes(b) || b.includes(a)) return true;
+      const tokensA = normalize(skillA);
+      const tokensB = normalize(skillB);
+      return tokensA.some(t => tokensB.includes(t));
+    };
 
     return otherUsers.map(other => {
-      const otherSkillsToLearn = other.skillsToLearn.map(s => s.skillName.toLowerCase());
+      const theirSkillsToLearn = other.skillsToLearn || [];
+      const theirSkillsToTeach = other.skillsToTeach || [];
 
-      const iCanTeachThem = currentUser.skillsToTeach.find(myTeach =>
-        otherSkillsToLearn.some(theirLearn =>
-          theirLearn.includes(myTeach.skillName.toLowerCase().split(' ')[0]) ||
-          myTeach.skillName.toLowerCase().includes(theirLearn.split(' ')[0])
-        )
+      const iCanTeachThem = mySkillsToTeach.find(myTeach =>
+        theirSkillsToLearn.some(theirLearn => isMatch(myTeach.skillName, theirLearn.skillName))
       );
 
-      const theyCanTeachMe = other.skillsToTeach.find(theirTeach =>
-        mySkillsToLearn.some(myLearn =>
-          myLearn.includes(theirTeach.skillName.toLowerCase().split(' ')[0]) ||
-          theirTeach.skillName.toLowerCase().includes(myLearn.split(' ')[0])
-        )
+      const theyCanTeachMe = theirSkillsToTeach.find(theirTeach =>
+        mySkillsToLearn.some(myLearn => isMatch(theirTeach.skillName, myLearn.skillName))
       );
 
       let matchScore = 60;
@@ -894,20 +949,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (iCanTeachThem && theyCanTeachMe) {
         matchScore = 96;
         quality = 'perfect';
-        reasons.push(`Direct 2-way barter! You teach ${iCanTeachThem.skillName}, they teach ${theyCanTeachMe.skillName}.`);
+        reasons.push(`Direct 2-way bilateral barter! You teach ${iCanTeachThem.skillName}, they teach ${theyCanTeachMe.skillName}.`);
         reasons.push(`High Trust Score match (${other.trustScore.overallScore}/100) with verified credentials.`);
-        reasons.push(`Compatible evening timeframes (8 hrs/week overlap).`);
+        reasons.push(`Compatible evening & weekend study hours.`);
       } else if (theyCanTeachMe) {
-        matchScore = 84;
+        matchScore = 86;
         quality = 'good';
         reasons.push(`They offer ${theyCanTeachMe.skillName} matching your active learning goal.`);
-        reasons.push(`Credit-based exchange or ₹${theyCanTeachMe.hourlyRateInr || 450}/hr escrow booking available.`);
+        reasons.push(`Escrow-protected barter credit exchange or ₹${theyCanTeachMe.hourlyRateInr || 450}/hr booking available.`);
       } else if (iCanTeachThem) {
-        matchScore = 76;
+        matchScore = 78;
         quality = 'good';
         reasons.push(`They want to learn ${iCanTeachThem.skillName}. You can earn credits teaching them.`);
+        reasons.push(`Active learner in your network (${other.streakDays}-day streak).`);
       } else {
-        matchScore = 58;
+        matchScore = 62;
         quality = 'possible';
         reasons.push(`Proximity match in technical discipline & campus network.`);
       }
@@ -918,17 +974,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quality,
         reasons,
         skillTeachMatch: {
-          offeredByYou: iCanTeachThem ? iCanTeachThem.skillName : currentUser.skillsToTeach[0]?.skillName || 'Programming',
-          wantedByThem: other.skillsToLearn[0]?.skillName || 'General Skills',
+          offeredByYou: iCanTeachThem ? iCanTeachThem.skillName : (mySkillsToTeach[0]?.skillName || 'General Skills'),
+          wantedByThem: theirSkillsToLearn[0]?.skillName || 'Technical Guidance',
           levelFit: 'Peer Proficiency Match',
         },
         skillLearnMatch: {
-          wantedByYou: currentUser.skillsToLearn[0]?.skillName || 'Acoustic Guitar',
-          offeredByThem: theyCanTeachMe ? theyCanTeachMe.skillName : other.skillsToTeach[0]?.skillName || 'General Skills',
+          wantedByYou: mySkillsToLearn[0]?.skillName || 'General Skills',
+          offeredByThem: theyCanTeachMe ? theyCanTeachMe.skillName : (theirSkillsToTeach[0]?.skillName || 'General Skills'),
           levelFit: 'Instructor Certified',
         },
         suggestedMode: ((iCanTeachThem && theyCanTeachMe) ? 'direct_exchange' : 'credit_exchange') as LearningMode,
-        paidFallbackPrice: other.skillsToTeach[0]?.hourlyRateInr || 450,
+        paidFallbackPrice: theirSkillsToTeach[0]?.hourlyRateInr || 450,
         availabilityOverlap: 'Evenings & Weekends (8 hrs/wk)',
       };
     }).sort((a, b) => b.matchScore - a.matchScore);
