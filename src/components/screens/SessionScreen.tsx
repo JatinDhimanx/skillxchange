@@ -894,11 +894,23 @@ export const SessionScreen: React.FC = () => {
         : localVideoRef.current;
 
       if (sourceVideo && sourceVideo.videoWidth > 0 && sourceVideo.videoHeight > 0) {
-        canvas.width = 320;
-        canvas.height = 180;
+        const vw = sourceVideo.videoWidth;
+        const vh = sourceVideo.videoHeight;
+        // Dynamically compute canvas dimensions preserving native aspect ratio
+        const targetMaxDim = 360;
+        let cw: number, ch: number;
+        if (vw >= vh) {
+          cw = targetMaxDim;
+          ch = Math.round((vh / vw) * targetMaxDim);
+        } else {
+          ch = targetMaxDim;
+          cw = Math.round((vw / vh) * targetMaxDim);
+        }
+        canvas.width = cw;
+        canvas.height = ch;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.drawImage(sourceVideo, 0, 0, 320, 180);
+          ctx.drawImage(sourceVideo, 0, 0, cw, ch);
           try {
             const frameBase64 = canvas.toDataURL('image/jpeg', 0.45);
             realtimeChannelRef.current.send({
@@ -1840,7 +1852,7 @@ export const SessionScreen: React.FC = () => {
                       ref={remoteVideoRef}
                       autoPlay
                       playsInline
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain bg-black"
                     />
                     <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-[10px] sm:text-xs font-mono-ledger font-bold flex items-center gap-1.5 sm:gap-2 z-20">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
@@ -1852,7 +1864,7 @@ export const SessionScreen: React.FC = () => {
                     <img
                       src={remoteFrameUrl}
                       alt="Live Remote Video Frame"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain bg-black"
                     />
                     <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-[10px] sm:text-xs font-mono-ledger font-bold flex items-center gap-1.5 sm:gap-2 z-20">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1945,9 +1957,9 @@ export const SessionScreen: React.FC = () => {
                 {/* Remote / peer tile */}
                 <div className="relative w-full h-full rounded-xl sm:rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden min-h-[140px]">
                   {remoteStream ? (
-                    <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                    <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />
                   ) : remoteFrameUrl ? (
-                    <img src={remoteFrameUrl} alt="Remote Peer Camera" className="w-full h-full object-cover" />
+                    <img src={remoteFrameUrl} alt="Remote Peer Camera" className="w-full h-full object-contain bg-black" />
                   ) : isSimulatedPeerActive ? (
                     <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900&auto=format&fit=crop&q=80" alt="Simulated Peer Video" className="w-full h-full object-cover" />
                   ) : (
