@@ -229,6 +229,7 @@ export const SessionScreen: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const hostVideoRef = useRef<HTMLVideoElement | null>(null);
+  const screenSharePreviewRef = useRef<HTMLVideoElement | null>(null);
   const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
@@ -426,16 +427,19 @@ export const SessionScreen: React.FC = () => {
 
   useEffect(() => {
     if (remoteStream) {
+      // Always show remote stream in remoteVideoRef
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = remoteStream;
         remoteVideoRef.current.play().catch(() => {});
       }
-      if (hostVideoRef.current && !isScreenSharing) {
+      // hostVideoRef shows remote stream only when WE are not screen sharing locally
+      // (when we screen share, hostVideoRef shows our local display stream)
+      if (hostVideoRef.current) {
         hostVideoRef.current.srcObject = remoteStream;
         hostVideoRef.current.play().catch(() => {});
       }
     }
-  }, [remoteStream, sessionView, viewMode, isScreenSharing]);
+  }, [remoteStream, sessionView, viewMode]);
 
   // ── P2P WEBRTC SIGNALING (ROBUST WITH QUEUED CANDIDATES & INVARIANT TRANSCEIVERS) ──
   useEffect(() => {
@@ -531,11 +535,12 @@ export const SessionScreen: React.FC = () => {
       pc.ontrack = event => {
         const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
         setRemoteStream(stream);
+        // Directly assign to DOM refs for instant playback
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = stream;
           remoteVideoRef.current.play().catch(() => {});
         }
-        if (hostVideoRef.current && !isScreenSharing) {
+        if (hostVideoRef.current) {
           hostVideoRef.current.srcObject = stream;
           hostVideoRef.current.play().catch(() => {});
         }
@@ -807,40 +812,47 @@ export const SessionScreen: React.FC = () => {
     });
   }, [mediaStream, isCameraActive, isScreenSharing]);
 
-  // Frame Broadcaster Fallback
+  // Frame Broadcaster — captures from webcam OR from screen share display stream
   useEffect(() => {
-    if (sessionView !== 'live_meeting' || !isCameraActive) return;
+    const isActive = sessionView === 'live_meeting' && (isCameraActive || isScreenSharing);
+    if (!isActive) return;
 
     const frameTimer = setInterval(() => {
-      if (localVideoRef.current && captureCanvasRef.current && isCameraActive && realtimeChannelRef.current) {
-        const video = localVideoRef.current;
-        const canvas = captureCanvasRef.current;
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          canvas.width = 320;
-          canvas.height = 180;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, 320, 180);
-            try {
-              const frameBase64 = canvas.toDataURL('image/jpeg', 0.45);
-              realtimeChannelRef.current.send({
-                type: 'broadcast',
-                event: 'video_frame',
-                payload: {
-                  from: localClientId.current,
-                  name: currentUser?.name,
-                  avatar: currentUser?.avatar,
-                  frame: frameBase64,
-                },
-              });
-            } catch {}
-          }
+      if (!realtimeChannelRef.current) return;
+      const canvas = captureCanvasRef.current;
+      if (!canvas) return;
+
+      // During screen share: capture from the screenSharePreviewRef (display stream)
+      // During normal: capture from localVideoRef (webcam)
+      const sourceVideo = isScreenSharing
+        ? screenSharePreviewRef.current
+        : localVideoRef.current;
+
+      if (sourceVideo && sourceVideo.videoWidth > 0 && sourceVideo.videoHeight > 0) {
+        canvas.width = 320;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(sourceVideo, 0, 0, 320, 180);
+          try {
+            const frameBase64 = canvas.toDataURL('image/jpeg', 0.45);
+            realtimeChannelRef.current.send({
+              type: 'broadcast',
+              event: 'video_frame',
+              payload: {
+                from: localClientId.current,
+                name: currentUser?.name,
+                avatar: currentUser?.avatar,
+                frame: frameBase64,
+              },
+            });
+          } catch {}
         }
       }
     }, 280);
 
     return () => clearInterval(frameTimer);
-  }, [sessionView, isCameraActive]);
+  }, [sessionView, isCameraActive, isScreenSharing]);
 
   const handleCreateAndStartRoom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -897,24 +909,54 @@ export const SessionScreen: React.FC = () => {
     }
   };
 
+  // Helper: reliably replace the video sender track across all peer connections
+  const replaceVideoTrackOnAllPeers = (track: MediaStreamTrack | null) => {
+    peerConnectionsRef.current.forEach(pc => {
+      try {
+        // First try senders (more reliable than transceivers)
+        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video' || s.track === null);
+        if (videoSender) {
+          videoSender.replaceTrack(track).catch(err => {
+            console.warn('replaceTrack failed, trying transceiver:', err);
+          });
+        } else {
+          // Fallback: find through transceivers
+          const videoTr = pc.getTransceivers().find(
+            t => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video'
+          );
+          if (videoTr) videoTr.sender.replaceTrack(track).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('replaceVideoTrackOnAllPeers error:', err);
+      }
+    });
+  };
+
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
+      // ── STOP screen sharing ──
       if (displayStreamRef.current) {
         displayStreamRef.current.getTracks().forEach(t => t.stop());
         displayStreamRef.current = null;
       }
       setIsScreenSharing(false);
+
+      // Clear screen share preview
+      if (screenSharePreviewRef.current) {
+        screenSharePreviewRef.current.srcObject = null;
+      }
+
+      // Restore local webcam to hostVideoRef (so we see local cam in main area when alone)
+      if (localVideoRef.current && mediaStreamRef.current) {
+        localVideoRef.current.srcObject = mediaStreamRef.current;
+        localVideoRef.current.play().catch(() => {});
+      }
+
+      // Switch peers back to webcam video track (or null if cam off)
       const camTrack = isCameraActive ? (mediaStreamRef.current?.getVideoTracks()[0] || null) : null;
-      peerConnectionsRef.current.forEach(pc => {
-        try {
-          const transceivers = pc.getTransceivers();
-          const videoTr = transceivers.find(t => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
-          if (videoTr) {
-            videoTr.sender.replaceTrack(camTrack).catch(() => {});
-          }
-        } catch {}
-      });
-      // Broadcast screen share stopped
+      replaceVideoTrackOnAllPeers(camTrack);
+
+      // Broadcast stop
       realtimeChannelRef.current?.send({
         type: 'broadcast',
         event: 'screen_share_status',
@@ -922,31 +964,64 @@ export const SessionScreen: React.FC = () => {
       });
       showToast('Screen sharing stopped.', 'info');
     } else {
+      // ── START screen sharing ──
       try {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            displaySurface: 'monitor',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 },
+          } as any,
+          audio: false,
+        });
         displayStreamRef.current = displayStream;
         setIsScreenSharing(true);
-        if (hostVideoRef.current) {
-          hostVideoRef.current.srcObject = displayStream;
-        }
-        const screenTrack = displayStream.getVideoTracks()[0];
-        peerConnectionsRef.current.forEach(pc => {
-          try {
-            const transceivers = pc.getTransceivers();
-            const videoTr = transceivers.find(t => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
-            if (videoTr) {
-              videoTr.sender.replaceTrack(screenTrack).catch(() => {});
-            }
-          } catch {}
-        });
 
-        // Broadcast screen share started
+        // Show the screen share in the dedicated preview ref (main stage)
+        if (screenSharePreviewRef.current) {
+          screenSharePreviewRef.current.srcObject = displayStream;
+          screenSharePreviewRef.current.play().catch(() => {});
+        }
+
+        // Replace video track on all connected peers
+        const screenTrack = displayStream.getVideoTracks()[0];
+        replaceVideoTrackOnAllPeers(screenTrack);
+
+        // Handle user pressing browser's native "Stop sharing" button
+        screenTrack.onended = () => {
+          if (displayStreamRef.current) {
+            displayStreamRef.current.getTracks().forEach(t => t.stop());
+            displayStreamRef.current = null;
+          }
+          if (screenSharePreviewRef.current) {
+            screenSharePreviewRef.current.srcObject = null;
+          }
+          setIsScreenSharing(false);
+
+          // Restore local webcam
+          if (localVideoRef.current && mediaStreamRef.current) {
+            localVideoRef.current.srcObject = mediaStreamRef.current;
+            localVideoRef.current.play().catch(() => {});
+          }
+
+          const camTrack = isCameraActive ? (mediaStreamRef.current?.getVideoTracks()[0] || null) : null;
+          replaceVideoTrackOnAllPeers(camTrack);
+
+          realtimeChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'screen_share_status',
+            payload: { from: localClientId.current, name: currentUser?.name, sharing: false },
+          });
+          showToast('Screen sharing ended.', 'info');
+        };
+
+        // Broadcast start
         realtimeChannelRef.current?.send({
           type: 'broadcast',
           event: 'screen_share_status',
           payload: { from: localClientId.current, name: currentUser?.name, sharing: true },
         });
-        // Add to own chat
         setInCallMessages(prev => [
           ...prev,
           {
@@ -958,31 +1033,12 @@ export const SessionScreen: React.FC = () => {
           },
         ]);
 
-        screenTrack.onended = () => {
-          if (displayStreamRef.current) {
-            displayStreamRef.current.getTracks().forEach(t => t.stop());
-            displayStreamRef.current = null;
-          }
-          setIsScreenSharing(false);
-          const camTrack = isCameraActive ? (mediaStreamRef.current?.getVideoTracks()[0] || null) : null;
-          peerConnectionsRef.current.forEach(pc => {
-            try {
-              const transceivers = pc.getTransceivers();
-              const videoTr = transceivers.find(t => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
-              if (videoTr) {
-                videoTr.sender.replaceTrack(camTrack).catch(() => {});
-              }
-            } catch {}
-          });
-          realtimeChannelRef.current?.send({
-            type: 'broadcast',
-            event: 'screen_share_status',
-            payload: { from: localClientId.current, name: currentUser?.name, sharing: false },
-          });
-        };
-        showToast('Live screen share broadcast started!', 'success');
-      } catch {
+        showToast('🖥️ Screen sharing started — peers can now see your screen!', 'success');
+      } catch (err: any) {
         setIsScreenSharing(false);
+        if (err.name !== 'NotAllowedError') {
+          showToast('Could not start screen sharing. Please try again.', 'warning');
+        }
       }
     }
   };
@@ -1683,12 +1739,33 @@ export const SessionScreen: React.FC = () => {
             {viewMode === 'speaker' && (
               <div className="relative w-full h-full flex items-center justify-center">
                 {isScreenSharing ? (
-                  <video
-                    ref={hostVideoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full h-full object-contain bg-black"
-                  />
+                  // LOCAL SCREEN SHARE — show our screen in main stage
+                  <div className="relative w-full h-full flex items-center justify-center bg-black">
+                    <video
+                      ref={screenSharePreviewRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-contain bg-black"
+                    />
+                    <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-blue-600/90 backdrop-blur-md border border-blue-400/40 text-white text-[10px] sm:text-xs font-mono-ledger font-bold flex items-center gap-1.5 sm:gap-2 z-20">
+                      <Share2 className="w-3 h-3" />
+                      <span>You are sharing your screen</span>
+                    </div>
+                    {/* Remote peer still visible as a smaller overlay when they are connected */}
+                    {(remoteStream || remoteFrameUrl) && (
+                      <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 w-28 sm:w-40 aspect-video rounded-xl bg-slate-900 border border-slate-600 overflow-hidden shadow-xl z-20">
+                        {remoteStream ? (
+                          <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                        ) : (
+                          <img src={remoteFrameUrl!} alt="Remote peer" className="w-full h-full object-cover" />
+                        )}
+                        <div className="absolute bottom-1 left-1 text-[8px] font-mono-ledger text-white/80 truncate px-1">
+                          {remotePeerInfo?.name || 'Peer'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : remoteStream ? (
                   <div className="relative w-full h-full flex items-center justify-center bg-black">
                     <video
@@ -1762,7 +1839,7 @@ export const SessionScreen: React.FC = () => {
                   </div>
                 )}
 
-                {/* Local Camera Self Picture-in-Picture (Responsive PiP) */}
+                {/* Local Camera Self Picture-in-Picture */}
                 <div className="absolute top-2 right-2 sm:top-4 sm:right-4 w-24 xs:w-28 sm:w-36 md:w-44 aspect-video rounded-xl sm:rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl overflow-hidden backdrop-blur-md z-20 group/pip">
                   {isCameraActive ? (
                     <video
@@ -1782,7 +1859,9 @@ export const SessionScreen: React.FC = () => {
                   )}
                   <div className="absolute bottom-0.5 left-1 sm:bottom-1 sm:left-2 text-[8px] sm:text-[9px] font-mono-ledger text-white/90 flex items-center gap-1">
                     <span className={`w-1.5 h-1.5 rounded-full ${isMuted ? 'bg-rose-500' : 'bg-emerald-400'}`}></span>
-                    <span className="hidden xs:inline">{isMuted ? 'Muted' : 'Audio Live'}</span>
+                    <span className="hidden xs:inline">
+                      {isScreenSharing ? 'Sharing' : isMuted ? 'Muted' : 'Audio Live'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1790,10 +1869,9 @@ export const SessionScreen: React.FC = () => {
 
             {viewMode === 'grid' && (
               <div className="w-full h-full grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 sm:p-3">
+                {/* Remote / peer tile */}
                 <div className="relative w-full h-full rounded-xl sm:rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden min-h-[140px]">
-                  {isScreenSharing ? (
-                    <video ref={hostVideoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />
-                  ) : remoteStream ? (
+                  {remoteStream ? (
                     <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
                   ) : remoteFrameUrl ? (
                     <img src={remoteFrameUrl} alt="Remote Peer Camera" className="w-full h-full object-cover" />
@@ -1817,8 +1895,11 @@ export const SessionScreen: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Local tile — shows screen share or webcam */}
                 <div className="relative w-full h-full rounded-xl sm:rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden min-h-[140px]">
-                  {isCameraActive ? (
+                  {isScreenSharing ? (
+                    <video ref={screenSharePreviewRef} autoPlay playsInline muted className="w-full h-full object-contain bg-black" />
+                  ) : isCameraActive ? (
                     <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                   ) : (
                     <div className="text-center space-y-1.5 p-2">
@@ -1828,7 +1909,7 @@ export const SessionScreen: React.FC = () => {
                   )}
                   <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-lg bg-slate-950/80 text-[9px] sm:text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
                     <span className={`w-1.5 h-1.5 rounded-full ${isMuted ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`}></span>
-                    <span>{currentUser?.name?.split(' ')[0]} (You)</span>
+                    <span>{currentUser?.name?.split(' ')[0]} {isScreenSharing ? '(Sharing)' : '(You)'}</span>
                   </div>
                 </div>
               </div>
