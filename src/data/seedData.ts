@@ -464,12 +464,116 @@ export const INITIAL_SKILLS: Skill[] = [
   }
 ];
 
-export const CHAINS: SkillChain[] = [];
-export const SEED_SKILL_CHAINS: SkillChain[] = [];
-export const INITIAL_COMMITMENTS: FutureCommitment[] = [];
-export const SEED_FUTURE_COMMITMENTS: FutureCommitment[] = [];
-export const TRANSCRIPT_PROOFS: SessionTranscriptProof[] = [];
-export const SEED_TRANSCRIPT_PROOFS: SessionTranscriptProof[] = [];
+export const CHAINS: SkillChain[] = [
+  {
+    id: 'chain-alpha-1',
+    name: 'Triangular Loop: Python ⇄ UI/UX ⇄ Guitar',
+    status: 'active',
+    nodes: [
+      {
+        userId: 'user-alex',
+        userName: 'Alex Rivera',
+        userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
+        teachesSkill: 'Python & AI Engineering',
+        learnsSkill: 'UI/UX Design Systems',
+        nextUserId: 'user-priya',
+        sessionDurationMins: 45,
+      },
+      {
+        userId: 'user-priya',
+        userName: 'Priya Sharma',
+        userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&auto=format&fit=crop&q=80',
+        teachesSkill: 'UI/UX Design Systems',
+        learnsSkill: 'Acoustic Guitar Fingerstyle',
+        nextUserId: 'user-rohan',
+        sessionDurationMins: 45,
+      },
+      {
+        userId: 'user-rohan',
+        userName: 'Rohan Mehta',
+        userAvatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500&auto=format&fit=crop&q=80',
+        teachesSkill: 'Acoustic Guitar Fingerstyle',
+        learnsSkill: 'Python & AI Engineering',
+        nextUserId: 'user-alex',
+        sessionDurationMins: 45,
+      },
+    ],
+    totalParticipants: 3,
+    efficiencyScore: 98,
+    estimatedCompletionWeeks: 2,
+    isFutureChain: false,
+  },
+];
+export const SEED_SKILL_CHAINS: SkillChain[] = CHAINS;
+
+export const INITIAL_COMMITMENTS: FutureCommitment[] = [
+  {
+    id: 'fc-1',
+    userId: 'user-alex',
+    userName: 'Alex Rivera',
+    userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
+    skillCurrentlyLearning: 'Rust Systems & WASM',
+    skillCommittedToTeach: 'Python & AI Engineering',
+    commitmentDate: '2026-09-01',
+    maturityDays: 14,
+    targetPrerequisiteLevel: 'Advanced',
+    status: 'ready_to_teach',
+  },
+];
+export const SEED_FUTURE_COMMITMENTS: FutureCommitment[] = INITIAL_COMMITMENTS;
+
+export const TRANSCRIPT_PROOFS: SessionTranscriptProof[] = [
+  {
+    id: 'proof-101',
+    sessionId: 'sess-proof-101',
+    learnerId: 'user-priya',
+    learnerName: 'Priya Sharma',
+    teacherId: 'user-alex',
+    teacherName: 'Alex Rivera',
+    skillName: 'Python & AI Engineering',
+    date: '2026-08-20',
+    sessionSummaryNotes: 'Verified deep understanding of contiguous C-arrays, CPU cache locality, and vector slicing.',
+    conceptsTaught: ['SIMD Vectorization', 'Memory Strides', 'Zero-Copy Slicing'],
+    quizQuestions: [
+      {
+        id: 'q1',
+        question: 'Why is NumPy array vectorization faster than Python loops?',
+        options: ['WebAssembly compilation', 'SIMD C-level contiguous memory instructions', 'GPU threads only', 'Disabled GC'],
+        correctOptionIndex: 1,
+        conceptTested: 'SIMD Contiguous Memory',
+      },
+    ],
+    learnerScore: 3,
+    masteryPercentage: 96,
+    isVerified: true,
+  },
+  {
+    id: 'proof-102',
+    sessionId: 'sess-proof-102',
+    learnerId: 'user-rohan',
+    learnerName: 'Rohan Mehta',
+    teacherId: 'user-priya',
+    teacherName: 'Priya Sharma',
+    skillName: 'UI/UX Design Systems & Figma',
+    date: '2026-08-22',
+    sessionSummaryNotes: 'Comprehensive walkthrough of semantic color tokens, responsive autolayout, and interactive state variants.',
+    conceptsTaught: ['Design Tokens', 'Autolayout Props', 'State Variants'],
+    quizQuestions: [
+      {
+        id: 'q2',
+        question: 'What is the primary benefit of semantic design tokens?',
+        options: ['Faster page reload', 'Centralized cross-platform theming consistency', 'Eliminates CSS', 'Bypasses DOM'],
+        correctOptionIndex: 1,
+        conceptTested: 'Design Tokens',
+      },
+    ],
+    learnerScore: 3,
+    masteryPercentage: 92,
+    isVerified: true,
+  },
+];
+export const SEED_TRANSCRIPT_PROOFS: SessionTranscriptProof[] = TRANSCRIPT_PROOFS;
+
 export const DYNAMIC_RATES: DynamicSkillRate[] = [
   {
     skillId: 'skill-python',
@@ -510,15 +614,125 @@ export const DYNAMIC_RATES: DynamicSkillRate[] = [
     change24h: 0.0,
     tier: 'Balanced Growth',
   },
+  {
+    skillId: 'skill-uiux',
+    skillName: 'UI/UX Design Systems & Figma',
+    category: 'Design & Creative',
+    supplyCount: 5,
+    demandCount: 19,
+    multiplier: 1.3,
+    creditPerHour: 1.3,
+    inrPerHour: 450,
+    trend: 'up',
+    change24h: 6.1,
+    tier: 'High Demand & Rare',
+  },
 ];
 
-export const INITIAL_BOUNTIES: SkillBounty[] = [];
-export const SEED_BOUNTIES: SkillBounty[] = [];
-export const FUSION_OPTIONS: FusionSessionOption[] = [];
-export const SEED_FUSION_OPTIONS: FusionSessionOption[] = [];
-export const PREDICTIVE_MATCHES: PredictiveMatch[] = [];
-export const SEED_PREDICTIVE_MATCHES: PredictiveMatch[] = [];
-export const INITIAL_NOTEBOOK_ENTRIES: NotebookEntry[] = [];
-export const SEED_NOTEBOOK_ENTRIES: NotebookEntry[] = [];
-export const INITIAL_CREDENTIALS: CredentialBlock[] = [];
-export const SEED_CREDENTIAL_LEDGER: CredentialBlock[] = [];
+export const INITIAL_BOUNTIES: SkillBounty[] = [
+  {
+    id: 'bounty-1',
+    learnerId: 'user-priya',
+    learnerName: 'Priya Sharma',
+    learnerAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&auto=format&fit=crop&q=80',
+    skillName: 'Python & AI Engineering',
+    category: 'Programming',
+    title: 'Need 1-on-1 PyTorch Graph Neural Networks Crash Course',
+    description: 'Looking for an experienced ML engineer to guide me through PyTorch Geometric and message-passing neural networks.',
+    targetLevel: 'Advanced',
+    budgetCredits: 3.5,
+    budgetInr: 1200,
+    deadlineWeeks: 2,
+    bidsCount: 2,
+    status: 'open',
+    createdAt: '2026-08-23',
+    bids: [],
+  },
+];
+export const SEED_BOUNTIES: SkillBounty[] = INITIAL_BOUNTIES;
+
+export const FUSION_OPTIONS: FusionSessionOption[] = [
+  {
+    id: 'fusion-1',
+    title: 'AI Code Generation + Figma Design Systems',
+    primarySkill: 'Python & AI Engineering',
+    secondarySkill: 'UI/UX Design Systems & Figma',
+    categoryCombo: 'Tech + Design',
+    compatibilityScore: 97,
+    suggestedSplitMins: '30m AI + 30m Figma',
+    rationale: 'Connecting automated LLM pipelines with design token systems accelerates production frontend workflows by 4x.',
+    idealFor: 'Full-Stack Developers and Product Designers building intelligent UI tools.',
+  },
+  {
+    id: 'fusion-2',
+    title: 'Music Rhythm Theory + Algorithmic Sound Synthesis',
+    primarySkill: 'Acoustic Guitar & Fingerstyle',
+    secondarySkill: 'Python & AI Engineering',
+    categoryCombo: 'Music + Tech',
+    compatibilityScore: 94,
+    suggestedSplitMins: '25m Rhythm + 25m DSP Code',
+    rationale: 'Musical harmonic theory maps directly to discrete Fourier transforms and audio digital signal processing.',
+    idealFor: 'Musicians interested in audio DSP and software engineers building generative audio.',
+  },
+];
+export const SEED_FUSION_OPTIONS: FusionSessionOption[] = FUSION_OPTIONS;
+
+export const PREDICTIVE_MATCHES: PredictiveMatch[] = [
+  {
+    id: 'pred-1',
+    targetTeacher: USERS[0],
+    prerequisiteRoadmapWeek: 2,
+    skillTrack: 'Python & AI Engineering',
+    projectedMatchScore: 98,
+    estimatedTimeToUnlockWeeks: 1,
+    aiPredictionReason: 'Alex teaches Python & AI which is your top learning goal, and seeks to exchange with your verified design skills.',
+  },
+];
+export const SEED_PREDICTIVE_MATCHES: PredictiveMatch[] = PREDICTIVE_MATCHES;
+
+export const INITIAL_NOTEBOOK_ENTRIES: NotebookEntry[] = [
+  {
+    id: 'note-1',
+    sessionId: 'sess-proof-101',
+    date: '2026-08-20',
+    skillCategory: 'Programming',
+    skillName: 'Python & AI Engineering',
+    teacherName: 'Alex Rivera',
+    title: 'Vectorized Memory & NumPy Strides',
+    summary: 'NumPy arrays are stored in contiguous blocks of C memory. Operations execute in vectorized SIMD CPU instructions.',
+    keyTakeaways: ['Contiguous Memory', 'SIMD Instructions', 'Memory Strides & Views'],
+    actionItems: ['Implement matrix multiplication benchmark without loops', 'Inspect array.flags.c_contiguous in profiling'],
+    codeSnippets: [
+      {
+        title: 'Zero-Copy Slicing Example',
+        language: 'python',
+        code: 'import numpy as np\narr = np.arange(1000000)\nview = arr[::2]  # Memory view, zero allocations',
+      },
+    ],
+    tags: ['numpy', 'simd', 'python', 'vectorization'],
+  },
+];
+export const SEED_NOTEBOOK_ENTRIES: NotebookEntry[] = INITIAL_NOTEBOOK_ENTRIES;
+
+export const INITIAL_CREDENTIALS: CredentialBlock[] = [
+  {
+    blockIndex: 1,
+    certificateId: 'CERT-2026-0001-PYTH',
+    learnerName: 'Priya Sharma',
+    learnerId: 'user-priya',
+    teacherName: 'Alex Rivera',
+    teacherId: 'user-alex',
+    skillName: 'Python & AI Engineering',
+    levelEarned: 'Intermediate',
+    sessionCount: 1,
+    quizScorePct: 100,
+    timestamp: '2026-08-20T10:30:00.000Z',
+    previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
+    blockHash: '0000a7b4e89f512c192d4f8e6b12a98f7c3e10d294857b6a987123456789abcd',
+    digitalSignature: 'SIG_SHA256_ED25519_0000a7b4e89f512c192d4f8e',
+    verificationUrl: 'https://verify.skillexchange.org/cert/CERT-2026-0001',
+    status: 'immutable_verified',
+  },
+];
+export const SEED_CREDENTIAL_LEDGER: CredentialBlock[] = INITIAL_CREDENTIALS;
+

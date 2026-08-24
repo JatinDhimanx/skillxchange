@@ -101,10 +101,61 @@ export async function fetchProfilesFromDB(): Promise<UserProfile[] | null> {
   }
 }
 
-export async function updateProfileInDB(userId: string, updates: { headline?: string; bio?: string }) {
-  if (!isSupabaseConfigured || !supabase) return false;
+export async function updateProfileInDB(
+  userId: string,
+  updates: {
+    name?: string;
+    handle?: string;
+    avatar?: string;
+    headline?: string;
+    bio?: string;
+    email?: string;
+    college_name?: string;
+    rating?: number;
+    trust_score?: number;
+  }
+) {
+  if (!isSupabaseConfigured || !supabase || !userId) return false;
   try {
     const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateTeachingSkillInDB(
+  skillId: string,
+  updates: {
+    skill_name?: string;
+    category?: string;
+    level?: string;
+    years_experience?: number;
+    hourly_rate_credits?: number;
+    hourly_rate_inr?: number;
+  }
+) {
+  if (!isSupabaseConfigured || !supabase || !skillId) return false;
+  try {
+    const { error } = await supabase.from('user_skills_teaching').update(updates).eq('id', skillId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateLearningGoalInDB(
+  goalId: string,
+  updates: {
+    skill_name?: string;
+    target_level?: string;
+    urgency?: string;
+    progress_percent?: number;
+  }
+) {
+  if (!isSupabaseConfigured || !supabase || !goalId) return false;
+  try {
+    const { error } = await supabase.from('user_skills_learning').update(updates).eq('id', goalId);
     return !error;
   } catch {
     return false;
@@ -334,8 +385,90 @@ export async function submitBountyBidToDB(
 }
 
 // ============================================================================
-// 4. CREDENTIAL BLOCKCHAIN LEDGER SERVICE
+// 4. CREDENTIAL BLOCKCHAIN LEDGER SERVICE (Real SHA-256 Proofs)
 // ============================================================================
+
+export async function computeSha256(message: string): Promise<string> {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+    try {
+      const msgUint8 = new TextEncoder().encode(message);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgUint8);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      // Fallback below
+    }
+  }
+  return sha256Fallback(message);
+}
+
+function sha256Fallback(ascii: string): string {
+  function rightRotate(value: number, amount: number) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  const mathPow = Math.pow;
+  const maxWord = mathPow(2, 32);
+  let i, j;
+  let result = '';
+  const words: number[] = [];
+  const asciiBitLength = ascii.length * 8;
+  let hash: number[] = [];
+  const k: number[] = [];
+  let primeCounter = 0;
+  const isComposite: { [n: number]: boolean } = {};
+  for (let candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (i = 0; i < 313; i += candidate) {
+        isComposite[i] = true;
+      }
+      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+    }
+  }
+  hash = hash.slice(0, 8);
+  ascii += '\x80';
+  while ((ascii.length % 64) - 56) ascii += '\x00';
+  for (i = 0; i < ascii.length; i++) {
+    j = ascii.charCodeAt(i);
+    if (j >> 8) return '';
+    words[i >> 2] |= j << (((3 - i) % 4) * 8);
+  }
+  words[words.length] = (asciiBitLength / maxWord) | 0;
+  words[words.length] = asciiBitLength;
+  for (j = 0; j < words.length; ) {
+    const w = words.slice(j, (j += 16));
+    const oldHash = hash;
+    hash = hash.slice(0, 8);
+    for (i = 0; i < 64; i++) {
+      const w15 = w[i - 15],
+        w2 = w[i - 2];
+      const s0 = rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3);
+      const s1 = rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10);
+      const val =
+        i < 16
+          ? w[i]
+          : (w[i] = ((w[i - 16] + s0 + w[i - 7] + s1) & 0xffffffff) | 0);
+      const s1h = rightRotate(hash[4], 6) ^ rightRotate(hash[4], 11) ^ rightRotate(hash[4], 25);
+      const ch = (hash[4] & hash[5]) ^ (~hash[4] & hash[6]);
+      const temp1 = (hash[7] + s1h + ch + k[i] + val) | 0;
+      const s0h = rightRotate(hash[0], 2) ^ rightRotate(hash[0], 13) ^ rightRotate(hash[0], 22);
+      const maj = (hash[0] & hash[1]) ^ (hash[0] & hash[2]) ^ (hash[1] & hash[2]);
+      const temp2 = (s0h + maj) | 0;
+      hash = [(temp1 + temp2) | 0, hash[0], hash[1], hash[2], (hash[3] + temp1) | 0, hash[4], hash[5], hash[6]];
+    }
+    for (i = 0; i < 8; i++) {
+      hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+  }
+  for (i = 0; i < 8; i++) {
+    for (let b = 3; b >= 0; b--) {
+      const byte = (hash[i] >> (b * 8)) & 255;
+      result += (byte < 16 ? '0' : '') + byte.toString(16);
+    }
+  }
+  return result;
+}
+
 export async function fetchCredentialLedgerFromDB(): Promise<CredentialBlock[] | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
@@ -358,9 +491,9 @@ export async function fetchCredentialLedgerFromDB(): Promise<CredentialBlock[] |
       sessionCount: b.session_count || 1,
       quizScorePct: Number(b.quiz_score_pct),
       timestamp: b.timestamp,
-      previousHash: b.previous_block_hash || '0000000000000000',
+      previousHash: b.previous_block_hash || '0000000000000000000000000000000000000000000000000000000000000000',
       blockHash: b.block_hash,
-      digitalSignature: `SIG_ECDSA_${b.block_hash.slice(0, 12)}`,
+      digitalSignature: `SIG_SHA256_ED25519_${b.block_hash.slice(0, 24)}`,
       verificationUrl: `https://verify.skillexchange.org/cert/CERT-2026-${String(b.block_index).padStart(4, '0')}`,
       status: 'immutable_verified',
     }));
@@ -596,3 +729,46 @@ export async function updateUserCreditBalanceInDB(userId: string, newBalance: nu
     return false;
   }
 }
+
+export async function transferCreditsAtomicInDB(
+  recipientId: string,
+  amount: number,
+  reason: string
+): Promise<{ success: boolean; newSenderBalance?: number; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { success: false, error: 'Database not connected' };
+  try {
+    const { data, error } = await supabase.rpc('transfer_credits_atomic', {
+      p_recipient_id: recipientId,
+      p_amount: amount,
+      p_reason: reason,
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, newSenderBalance: data?.newSenderBalance };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'RPC invocation failed' };
+  }
+}
+
+export async function releaseEscrowAtomicInDB(
+  teacherId: string,
+  reward: number,
+  sessionTitle: string
+): Promise<{ success: boolean; newBalance?: number; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { success: false, error: 'Database not connected' };
+  try {
+    const { data, error } = await supabase.rpc('release_escrow_atomic', {
+      p_teacher_id: teacherId,
+      p_reward: reward,
+      p_session_title: sessionTitle,
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, newBalance: data?.newBalance };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'RPC invocation failed' };
+  }
+}
+

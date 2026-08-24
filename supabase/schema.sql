@@ -292,11 +292,11 @@ ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
--- 1. Profiles: Publicly viewable for match discovery, but only owner can modify
+-- 1. Profiles: Publicly viewable for match discovery, only owner can modify
 CREATE POLICY "Public profiles are readable by everyone" ON public.profiles
     FOR SELECT USING (true);
 CREATE POLICY "Users can insert their own profile" ON public.profiles
-    FOR INSERT WITH CHECK (auth.uid()::TEXT = id OR auth.uid() IS NULL);
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = id);
 CREATE POLICY "Users can update their own profile" ON public.profiles
     FOR UPDATE USING (auth.uid()::TEXT = id) WITH CHECK (auth.uid()::TEXT = id);
 CREATE POLICY "Users can delete their own profile" ON public.profiles
@@ -307,8 +307,6 @@ CREATE POLICY "Public skills are readable by everyone" ON public.skills
     FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can register skills" ON public.skills
     FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
-CREATE POLICY "Authenticated users can update skills" ON public.skills
-    FOR UPDATE USING (auth.uid() IS NOT NULL);
 
 -- 3. Teaching Skills: Publicly viewable, managed only by owner
 CREATE POLICY "Teaching skills viewable by everyone" ON public.user_skills_teaching
@@ -330,13 +328,13 @@ CREATE POLICY "Users can update own learning goals" ON public.user_skills_learni
 CREATE POLICY "Users can delete own learning goals" ON public.user_skills_learning
     FOR DELETE USING (auth.uid()::TEXT = user_id);
 
--- 5. Skill Chains: Viewable by all, managed by participants
+-- 5. Skill Chains: Viewable by all, managed by authenticated creators/participants
 CREATE POLICY "Skill chains viewable by everyone" ON public.skill_chains
     FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can create skill chains" ON public.skill_chains
     FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
-CREATE POLICY "Authenticated users can update skill chains" ON public.skill_chains
-    FOR UPDATE USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Participants can update skill chains" ON public.skill_chains
+    FOR UPDATE USING (auth.uid() IS NOT NULL AND loop_users::text LIKE '%' || auth.uid()::text || '%');
 
 -- 6. Skill Bounties: Viewable by all, created & updated by bounty owner (learner)
 CREATE POLICY "Bounties viewable by everyone" ON public.skill_bounties
@@ -358,11 +356,11 @@ CREATE POLICY "Teachers can update own bids" ON public.bounty_bids
 CREATE POLICY "Teachers can delete own bids" ON public.bounty_bids
     FOR DELETE USING (auth.uid()::TEXT = teacher_id);
 
--- 8. Credential Blocks: Verifiable by anyone, created by verified session teachers
+-- 8. Credential Blocks: Verifiable by anyone, created only by verified session teachers
 CREATE POLICY "Credential ledger blocks are publicly verifiable" ON public.credential_blocks
     FOR SELECT USING (true);
 CREATE POLICY "Credential blocks created by authenticated session teachers" ON public.credential_blocks
-    FOR INSERT WITH CHECK (auth.uid()::TEXT = teacher_id OR auth.uid() IS NOT NULL);
+    FOR INSERT WITH CHECK (auth.uid()::TEXT = teacher_id);
 
 -- 9. Second-Brain Notebook: Strictly private to authenticated user
 CREATE POLICY "Users can only read own notebook entries" ON public.notebook_entries
@@ -371,7 +369,7 @@ CREATE POLICY "Users can only insert own notebook entries" ON public.notebook_en
     FOR INSERT WITH CHECK (auth.uid()::TEXT = user_id);
 CREATE POLICY "Users can only update own notebook entries" ON public.notebook_entries
     FOR UPDATE USING (auth.uid()::TEXT = user_id) WITH CHECK (auth.uid()::TEXT = user_id);
-CREATE POLICY "Users can only delete own notebook entries" ON public.notebook_entries
+CREATE POLICY "Users can delete own notebook entries" ON public.notebook_entries
     FOR DELETE USING (auth.uid()::TEXT = user_id);
 
 -- 10. Peer Chat Messages: Strictly accessible only by sender or receiver
@@ -395,6 +393,169 @@ CREATE POLICY "Users can only update own notifications" ON public.notifications
     FOR UPDATE USING (auth.uid()::TEXT = user_id) WITH CHECK (auth.uid()::TEXT = user_id);
 CREATE POLICY "Users can delete own notifications" ON public.notifications
     FOR DELETE USING (auth.uid()::TEXT = user_id);
+
+-- ============================================================================
+-- Atomic Stored Procedures (RPCs) for Economic Integrity
+-- ============================================================================
+
+-- 1. Atomic Peer-to-Peer Credit Transfer
+CREATE OR REPLACE FUNCTION public.transfer_credits_atomic(
+    p_recipient_id TEXT,
+    p_amount NUMERIC,
+    p_reason TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_sender_id TEXT;
+    v_sender_balance NUMERIC;
+    v_recipient_balance NUMERIC;
+    v_new_sender_balance NUMERIC;
+    v_new_recipient_balance NUMERIC;
+    v_recipient_name TEXT;
+    v_sender_name TEXT;
+BEGIN
+    v_sender_id := auth.uid()::TEXT;
+    IF v_sender_id IS NULL THEN
+        RAISE EXCEPTION 'Unauthorized: User must be authenticated to transfer credits';
+    END IF;
+
+    IF v_sender_id = p_recipient_id THEN
+        RAISE EXCEPTION 'Invalid transfer: Cannot transfer credits to yourself';
+    END IF;
+
+    IF p_amount <= 0 THEN
+        RAISE EXCEPTION 'Invalid transfer: Transfer amount must be positive';
+    END IF;
+
+    -- Lock sender profile row for update
+    SELECT credit_balance, COALESCE(name, 'Peer')
+    INTO v_sender_balance, v_sender_name
+    FROM public.profiles
+    WHERE id = v_sender_id
+    FOR UPDATE;
+
+    IF v_sender_balance IS NULL THEN
+        RAISE EXCEPTION 'Sender profile not found';
+    END IF;
+
+    IF v_sender_balance < p_amount THEN
+        RAISE EXCEPTION 'Insufficient credit balance: Available % CR, Required % CR', v_sender_balance, p_amount;
+    END IF;
+
+    -- Lock recipient profile row for update
+    SELECT credit_balance, COALESCE(name, 'Peer')
+    INTO v_recipient_balance, v_recipient_name
+    FROM public.profiles
+    WHERE id = p_recipient_id
+    FOR UPDATE;
+
+    IF v_recipient_balance IS NULL THEN
+        RAISE EXCEPTION 'Recipient profile not found';
+    END IF;
+
+    v_new_sender_balance := v_sender_balance - p_amount;
+    v_new_recipient_balance := v_recipient_balance + p_amount;
+
+    -- Update sender
+    UPDATE public.profiles
+    SET credit_balance = v_new_sender_balance,
+        updated_at = NOW()
+    WHERE id = v_sender_id;
+
+    -- Update recipient
+    UPDATE public.profiles
+    SET credit_balance = v_new_recipient_balance,
+        updated_at = NOW()
+    WHERE id = p_recipient_id;
+
+    -- Insert sender debit transaction
+    INSERT INTO public.credit_transactions (user_id, description, delta, balance)
+    VALUES (v_sender_id, 'Transfer to ' || v_recipient_name || ': ' || p_reason, -p_amount, v_new_sender_balance);
+
+    -- Insert recipient credit transaction
+    INSERT INTO public.credit_transactions (user_id, description, delta, balance)
+    VALUES (p_recipient_id, 'Transfer from ' || v_sender_name || ': ' || p_reason, p_amount, v_new_recipient_balance);
+
+    -- Insert notification for recipient
+    INSERT INTO public.notifications (user_id, title, description, time_ago, type)
+    VALUES (
+        p_recipient_id,
+        'Credits Received! (+' || p_amount::TEXT || ' CR)',
+        v_sender_name || ' transferred ' || p_amount::TEXT || ' CR: ' || p_reason,
+        'Just now',
+        'credit'
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'newSenderBalance', v_new_sender_balance,
+        'newRecipientBalance', v_new_recipient_balance,
+        'amount', p_amount
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- 2. Atomic Escrow Settlement Procedure
+CREATE OR REPLACE FUNCTION public.release_escrow_atomic(
+    p_teacher_id TEXT,
+    p_reward NUMERIC,
+    p_session_title TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_caller_id TEXT;
+    v_teacher_balance NUMERIC;
+    v_new_balance NUMERIC;
+BEGIN
+    v_caller_id := auth.uid()::TEXT;
+    IF v_caller_id IS NULL THEN
+        RAISE EXCEPTION 'Unauthorized: User must be authenticated to release escrow';
+    END IF;
+
+    IF p_reward <= 0 THEN
+        RAISE EXCEPTION 'Invalid reward amount';
+    END IF;
+
+    -- Lock teacher profile row
+    SELECT credit_balance
+    INTO v_teacher_balance
+    FROM public.profiles
+    WHERE id = p_teacher_id
+    FOR UPDATE;
+
+    IF v_teacher_balance IS NULL THEN
+        RAISE EXCEPTION 'Teacher profile not found';
+    END IF;
+
+    v_new_balance := v_teacher_balance + p_reward;
+
+    -- Update teacher balance
+    UPDATE public.profiles
+    SET credit_balance = v_new_balance,
+        updated_at = NOW()
+    WHERE id = p_teacher_id;
+
+    -- Log transaction
+    INSERT INTO public.credit_transactions (user_id, description, delta, balance)
+    VALUES (p_teacher_id, 'Escrow Settlement: ' || p_session_title, p_reward, v_new_balance);
+
+    -- Notify teacher
+    INSERT INTO public.notifications (user_id, title, description, time_ago, type)
+    VALUES (
+        p_teacher_id,
+        'Escrow Released! (+' || p_reward::TEXT || ' CR)',
+        'Session escrow settled for ' || p_session_title,
+        'Just now',
+        'credit'
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'newBalance', v_new_balance,
+        'reward', p_reward
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Enable Realtime Publication for collaborative features
 ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;

@@ -244,11 +244,22 @@ export const SessionScreen: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
 
+  // Remote peer real-time states
+  const [remoteHandRaised, setRemoteHandRaised] = useState<boolean>(false);
+  const [remoteHandRaisedName, setRemoteHandRaisedName] = useState<string>('');
+  const [remotePeerScreenSharing, setRemotePeerScreenSharing] = useState<boolean>(false);
+
+  // Chat UI state
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const iceCandidatesQueue = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const realtimeChannelRef = useRef<any>(null);
   const localClientId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const displayStreamRef = useRef<MediaStream | null>(null);
 
   const ICE_SERVERS: RTCConfiguration = {
     iceServers: [
@@ -426,7 +437,7 @@ export const SessionScreen: React.FC = () => {
     }
   }, [remoteStream, sessionView, viewMode, isScreenSharing]);
 
-  // ── P2P WEBRTC SIGNALING (ROBUST WITH QUEUED CANDIDATES) ──
+  // ── P2P WEBRTC SIGNALING (ROBUST WITH QUEUED CANDIDATES & INVARIANT TRANSCEIVERS) ──
   useEffect(() => {
     if (sessionView !== 'live_meeting' || !supabase) return;
 
@@ -437,22 +448,6 @@ export const SessionScreen: React.FC = () => {
     realtimeChannelRef.current = channel;
     const pcMap = peerConnectionsRef.current;
     const candidateQueues = iceCandidatesQueue.current;
-
-    const attachLocalTracks = (pc: RTCPeerConnection) => {
-      const stream = mediaStreamRef.current;
-      if (!stream) return;
-      const senders = pc.getSenders();
-      stream.getTracks().forEach(track => {
-        const exists = senders.some(s => s.track?.id === track.id);
-        if (!exists) {
-          try {
-            pc.addTrack(track, stream);
-          } catch (err) {
-            console.error('Track attach failed:', err);
-          }
-        }
-      });
-    };
 
     const flushIceCandidates = async (peerId: string, pc: RTCPeerConnection) => {
       const queue = candidateQueues.get(peerId) || [];
@@ -496,7 +491,27 @@ export const SessionScreen: React.FC = () => {
         candidateQueues.set(targetClientId, []);
       }
 
-      attachLocalTracks(pc);
+      // Initialize transceivers in invariant order: 1) audio, 2) video
+      const audioTrack = mediaStreamRef.current?.getAudioTracks()[0] || null;
+      const videoTrack = (isScreenSharing && displayStreamRef.current ? displayStreamRef.current.getVideoTracks()[0] : mediaStreamRef.current?.getVideoTracks()[0]) || null;
+
+      try {
+        if (pc.getTransceivers().length === 0) {
+          if (audioTrack) {
+            pc.addTransceiver(audioTrack, { direction: 'sendrecv' });
+          } else {
+            pc.addTransceiver('audio', { direction: 'sendrecv' });
+          }
+
+          if (videoTrack) {
+            pc.addTransceiver(videoTrack, { direction: 'sendrecv' });
+          } else {
+            pc.addTransceiver('video', { direction: 'sendrecv' });
+          }
+        }
+      } catch (err) {
+        console.warn('Transceiver init warning:', err);
+      }
 
       pc.onicecandidate = event => {
         if (event.candidate) {
@@ -532,45 +547,16 @@ export const SessionScreen: React.FC = () => {
         }
       };
 
-      // Re-negotiate automatically whenever a local track is added to an
-      // already-negotiated connection (e.g. camera turns on after call starts).
-      pc.onnegotiationneeded = async () => {
-        // Only the initiator should re-negotiate to avoid glare.
-        if (pc.signalingState !== 'stable') return;
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          channel.send({
-            type: 'broadcast',
-            event: 'webrtc_signal',
-            payload: {
-              type: 'sdp_offer',
-              from: localClientId.current,
-              to: targetClientId,
-              sdp: offer,
-              senderName: currentUser?.name || 'Peer',
-              senderAvatar: currentUser?.avatar || '',
-            },
-          });
-        } catch (err) {
-          console.error('Renegotiation failed:', err);
-        }
-      };
-
       return pc;
     };
 
     const sendOffer = async (targetClientId: string) => {
       const pc = getOrCreatePeerConnection(targetClientId);
-      // Don't create a duplicate offer if we're already negotiating.
       if (pc.signalingState !== 'stable' && pc.signalingState !== 'have-local-offer') return;
-      // Already have a remote description — peer is connected, skip.
       if (pc.remoteDescription) return;
       try {
-        const offer = await pc.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: true,
-        });
+        const offer = await pc.createOffer();
+        if (pc.signalingState !== 'stable') return;
         await pc.setLocalDescription(offer);
         channel.send({
           type: 'broadcast',
@@ -643,9 +629,11 @@ export const SessionScreen: React.FC = () => {
 
           try {
             if (pc.signalingState !== 'stable') {
-              await Promise.all([
-                pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit).catch(() => {}),
-              ]);
+              if (localClientId.current < peerId) {
+                // Impolite peer ignores incoming offer during glare
+                return;
+              }
+              await pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit).catch(() => {});
             }
             await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
             await flushIceCandidates(peerId, pc);
@@ -703,6 +691,11 @@ export const SessionScreen: React.FC = () => {
               isMe: false,
             },
           ]);
+          // Increment unread badge when chat panel is not open
+          setActiveSidePanel(prev => {
+            if (prev !== 'chat') setChatUnreadCount(c => c + 1);
+            return prev;
+          });
         }
       })
       .on('broadcast', { event: 'video_frame' }, ({ payload }) => {
@@ -718,6 +711,44 @@ export const SessionScreen: React.FC = () => {
       .on('broadcast', { event: 'emoji_reaction' }, ({ payload }) => {
         if (payload && payload.from !== localClientId.current) {
           triggerReaction(payload.emoji, false);
+        }
+      })
+      .on('broadcast', { event: 'hand_raise' }, ({ payload }) => {
+        if (payload && payload.from !== localClientId.current) {
+          setRemoteHandRaised(payload.raised);
+          setRemoteHandRaisedName(payload.name || 'Peer');
+          if (payload.raised) {
+            showToast(`✋ ${payload.name || 'A peer'} raised their hand!`, 'info');
+          }
+        }
+      })
+      .on('broadcast', { event: 'screen_share_status' }, ({ payload }) => {
+        if (payload && payload.from !== localClientId.current) {
+          setRemotePeerScreenSharing(payload.sharing);
+          if (payload.sharing) {
+            showToast(`🖥️ ${payload.name || 'A peer'} started screen sharing`, 'info');
+            setInCallMessages(prev => [
+              ...prev,
+              {
+                sender: '🖥️ System',
+                avatar: '',
+                text: `${payload.name || 'A peer'} started screen sharing`,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isMe: false,
+              },
+            ]);
+          } else {
+            setInCallMessages(prev => [
+              ...prev,
+              {
+                sender: '🖥️ System',
+                avatar: '',
+                text: `${payload.name || 'A peer'} stopped screen sharing`,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isMe: false,
+              },
+            ]);
+          }
         }
       })
       .subscribe(status => {
@@ -753,20 +784,28 @@ export const SessionScreen: React.FC = () => {
     };
   }, [sessionView, activeMeeting.roomCode]);
 
+  // Seamless track updates across WebRTC without touching SDP m-line ordering
   useEffect(() => {
     mediaStreamRef.current = mediaStream;
     if (!mediaStream) return;
+    const audioTrack = mediaStream.getAudioTracks()[0] || null;
+    const videoTrack = isCameraActive ? (mediaStream.getVideoTracks()[0] || null) : null;
+
     peerConnectionsRef.current.forEach(pc => {
-      const existing = new Set(pc.getSenders().map(s => s.track?.id).filter(Boolean));
-      mediaStream.getTracks().forEach(track => {
-        if (!existing.has(track.id)) {
-          try {
-            pc.addTrack(track, mediaStream);
-          } catch {}
-        }
-      });
+      try {
+        const transceivers = pc.getTransceivers();
+        transceivers.forEach(t => {
+          if (t.receiver.track.kind === 'audio' || t.sender.track?.kind === 'audio') {
+            if (audioTrack) t.sender.replaceTrack(audioTrack).catch(() => {});
+          } else if (t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video') {
+            if (!isScreenSharing && videoTrack) {
+              t.sender.replaceTrack(videoTrack).catch(() => {});
+            }
+          }
+        });
+      } catch {}
     });
-  }, [mediaStream]);
+  }, [mediaStream, isCameraActive, isScreenSharing]);
 
   // Frame Broadcaster Fallback
   useEffect(() => {
@@ -860,17 +899,86 @@ export const SessionScreen: React.FC = () => {
 
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
+      if (displayStreamRef.current) {
+        displayStreamRef.current.getTracks().forEach(t => t.stop());
+        displayStreamRef.current = null;
+      }
       setIsScreenSharing(false);
+      const camTrack = isCameraActive ? (mediaStreamRef.current?.getVideoTracks()[0] || null) : null;
+      peerConnectionsRef.current.forEach(pc => {
+        try {
+          const transceivers = pc.getTransceivers();
+          const videoTr = transceivers.find(t => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
+          if (videoTr) {
+            videoTr.sender.replaceTrack(camTrack).catch(() => {});
+          }
+        } catch {}
+      });
+      // Broadcast screen share stopped
+      realtimeChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'screen_share_status',
+        payload: { from: localClientId.current, name: currentUser?.name, sharing: false },
+      });
       showToast('Screen sharing stopped.', 'info');
     } else {
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        displayStreamRef.current = displayStream;
         setIsScreenSharing(true);
         if (hostVideoRef.current) {
           hostVideoRef.current.srcObject = displayStream;
         }
-        displayStream.getVideoTracks()[0].onended = () => {
+        const screenTrack = displayStream.getVideoTracks()[0];
+        peerConnectionsRef.current.forEach(pc => {
+          try {
+            const transceivers = pc.getTransceivers();
+            const videoTr = transceivers.find(t => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
+            if (videoTr) {
+              videoTr.sender.replaceTrack(screenTrack).catch(() => {});
+            }
+          } catch {}
+        });
+
+        // Broadcast screen share started
+        realtimeChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'screen_share_status',
+          payload: { from: localClientId.current, name: currentUser?.name, sharing: true },
+        });
+        // Add to own chat
+        setInCallMessages(prev => [
+          ...prev,
+          {
+            sender: '🖥️ System',
+            avatar: '',
+            text: `You started screen sharing`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isMe: false,
+          },
+        ]);
+
+        screenTrack.onended = () => {
+          if (displayStreamRef.current) {
+            displayStreamRef.current.getTracks().forEach(t => t.stop());
+            displayStreamRef.current = null;
+          }
           setIsScreenSharing(false);
+          const camTrack = isCameraActive ? (mediaStreamRef.current?.getVideoTracks()[0] || null) : null;
+          peerConnectionsRef.current.forEach(pc => {
+            try {
+              const transceivers = pc.getTransceivers();
+              const videoTr = transceivers.find(t => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
+              if (videoTr) {
+                videoTr.sender.replaceTrack(camTrack).catch(() => {});
+              }
+            } catch {}
+          });
+          realtimeChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'screen_share_status',
+            payload: { from: localClientId.current, name: currentUser?.name, sharing: false },
+          });
         };
         showToast('Live screen share broadcast started!', 'success');
       } catch {
@@ -884,10 +992,14 @@ export const SessionScreen: React.FC = () => {
       if (mediaStream) {
         mediaStream.getTracks().forEach(t => t.stop());
       }
+      if (displayStreamRef.current) {
+        displayStreamRef.current.getTracks().forEach(t => t.stop());
+      }
     };
   }, [mediaStream]);
 
   // Reactions
+  const REACTION_EMOJIS = ['🔥', '💡', '👏', '🚀', '❓', '😄', '😮', '👍', '❤️', '🎉', '🤔', '💯'];
   const [floatingReactions, setFloatingReactions] = useState<{ id: string; emoji: string; left: number }[]>([]);
   const triggerReaction = (emoji: string, broadcast = true) => {
     const newId = `${Date.now()}-${Math.random()}`;
@@ -908,6 +1020,20 @@ export const SessionScreen: React.FC = () => {
       });
     }
   };
+
+  // Broadcast hand raise whenever it changes
+  useEffect(() => {
+    if (sessionView !== 'live_meeting') return;
+    realtimeChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'hand_raise',
+      payload: {
+        from: localClientId.current,
+        name: currentUser?.name || 'Peer',
+        raised: handRaised,
+      },
+    });
+  }, [handRaised]);
 
   // Chat
   const [inCallMessages, setInCallMessages] = useState<{ sender: string; avatar: string; text: string; time: string; isMe: boolean }[]>([
@@ -1117,9 +1243,9 @@ export const SessionScreen: React.FC = () => {
 
   // Micro-Quiz
   const [showQuizModal, setShowQuizModal] = useState(false);
-  const [quizAnswers, setQuizAnswers] = useState<{ [qIdx: number]: number }>({ 0: 1, 1: 0, 2: 2 });
+  const [quizAnswers, setQuizAnswers] = useState<{ [qIdx: number]: number }>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
-  const [quizScore, setQuizScore] = useState<number>(100);
+  const [quizScore, setQuizScore] = useState<number>(0);
   const [mintedHash, setMintedHash] = useState<string>('');
 
   const QUIZ_QUESTIONS = [
@@ -1165,27 +1291,35 @@ export const SessionScreen: React.FC = () => {
     setQuizScore(scorePct);
     setQuizSubmitted(true);
 
-    const newHash = `0000a7b4e89f${Date.now().toString(16)}c192d4f8e6b1`.slice(0, 32);
-    setMintedHash(newHash);
+    if (scorePct >= 66) {
+      const newHash = `0000a7b4e89f${Date.now().toString(16)}c192d4f8e6b1`.slice(0, 32);
+      setMintedHash(newHash);
 
-    if (generateNewCredentialBlock) {
-      generateNewCredentialBlock(currentUser?.name || 'User', currentUser?.id || '0', activeMeeting.skill, scorePct);
+      if (generateNewCredentialBlock) {
+        generateNewCredentialBlock(currentUser?.name || 'User', currentUser?.id || '0', activeMeeting.skill, scorePct);
+      }
+
+      try {
+        confetti({
+          particleCount: 90,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#059669', '#D97706', '#2563EB', '#F59E0B'],
+        });
+      } catch {}
+      showToast(`Micro-Quiz Verified! Scored ${scorePct}% (Passed ≥66%). Minted to Credential Ledger.`, 'success');
+    } else {
+      showToast(`Score: ${scorePct}%. Passing threshold is 66%. Please review the session concepts and try again!`, 'warning');
     }
-
-    try {
-      confetti({
-        particleCount: 90,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ['#059669', '#D97706', '#2563EB', '#F59E0B'],
-      });
-    } catch {}
-    showToast(`Micro-Quiz submitted with ${scorePct}%! Minted to Credential Ledger.`, 'success');
   };
 
   const handleLeaveMeeting = () => {
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
+    }
+    if (displayStreamRef.current) {
+      displayStreamRef.current.getTracks().forEach(t => t.stop());
+      displayStreamRef.current = null;
     }
     setMediaStream(null);
     mediaStreamRef.current = null;
@@ -1494,53 +1628,56 @@ export const SessionScreen: React.FC = () => {
   }
 
   return (
-    <div className="py-2 sm:py-4 max-w-[1360px] mx-auto px-2 sm:px-4 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-3xl bg-slate-900 text-white shadow-xl border border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+    <div className="py-2 sm:py-4 max-w-[1360px] mx-auto px-2 sm:px-4 space-y-3 sm:space-y-4">
+      {/* ── Top Header Bar ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-slate-900 text-white shadow-xl border border-slate-800">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
             <Radio className="w-4 h-4 animate-pulse" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-display font-bold text-sm sm:text-base text-white truncate max-w-xs sm:max-w-md">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-display font-bold text-xs sm:text-sm md:text-base text-white truncate max-w-[200px] xs:max-w-[260px] sm:max-w-md">
                 {activeMeeting.topic}
               </h2>
-              <span className="hidden sm:inline-flex text-[10px] font-mono-ledger font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span className="inline-flex text-[9px] sm:text-[10px] font-mono-ledger font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
                 1080p WebRTC
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono-ledger">
-              Room Code: <strong className="text-amber-400">{activeMeeting.roomCode}</strong> • Instructor: <strong className="text-slate-200">{activeMeeting.instructorName}</strong>
+            <p className="text-[10px] sm:text-[11px] text-slate-400 font-mono-ledger truncate">
+              Room: <strong className="text-amber-400">{activeMeeting.roomCode}</strong> • Mentor: <strong className="text-slate-200">{activeMeeting.instructorName}</strong>
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 justify-end">
           <button
             onClick={copyMeetLink}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono-ledger font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] sm:text-xs font-mono-ledger font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
             title="Copy Meeting Link"
           >
             <Copy className="w-3.5 h-3.5" />
-            <span>Copy Link</span>
+            <span className="hidden xs:inline">Copy Link</span>
           </button>
 
           <button
             onClick={() => setShowQuizModal(true)}
-            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+            className="px-3 sm:px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] sm:text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
           >
             <Award className="w-3.5 h-3.5" />
-            <span>Take Quiz & Mint</span>
+            <span>Quiz & Mint</span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+      {/* ── Main Stage Grid: Video + Side Tools ───────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 items-start">
         <div className={`${activeSidePanel ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-3 transition-all duration-200`}>
+          {/* Video Container Stage */}
           <div
             ref={videoStageContainerRef}
-            className={`relative rounded-3xl bg-slate-950 border border-slate-800 overflow-hidden shadow-2xl flex items-center justify-center group ${
-              isFullscreen ? 'fixed inset-0 z-[100] rounded-none border-none aspect-auto w-screen h-screen' : 'aspect-video'
+            className={`relative rounded-2xl sm:rounded-3xl bg-slate-950 border border-slate-800 overflow-hidden shadow-2xl flex items-center justify-center group ${
+              isFullscreen ? 'fixed inset-0 z-[100] rounded-none border-none aspect-auto w-screen h-screen' : 'min-h-[220px] max-h-[50vh] sm:max-h-none sm:aspect-video w-full'
             }`}
           >
             {viewMode === 'speaker' && (
@@ -1560,9 +1697,9 @@ export const SessionScreen: React.FC = () => {
                       playsInline
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
+                    <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-[10px] sm:text-xs font-mono-ledger font-bold flex items-center gap-1.5 sm:gap-2 z-20">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span>{remotePeerInfo?.name || activeMeeting.instructorName} (Live 1080p Stream)</span>
+                      <span className="truncate max-w-[150px] sm:max-w-none">{remotePeerInfo?.name || activeMeeting.instructorName} (Live Stream)</span>
                     </div>
                   </div>
                 ) : remoteFrameUrl ? (
@@ -1572,9 +1709,9 @@ export const SessionScreen: React.FC = () => {
                       alt="Live Remote Video Frame"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
+                    <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-[10px] sm:text-xs font-mono-ledger font-bold flex items-center gap-1.5 sm:gap-2 z-20">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <span>{remotePeerInfo?.name || 'Peer on 2nd Device'} (Live Broadcast)</span>
+                      <span className="truncate max-w-[150px] sm:max-w-none">{remotePeerInfo?.name || 'Peer on 2nd Device'}</span>
                     </div>
                   </div>
                 ) : isSimulatedPeerActive ? (
@@ -1584,49 +1721,49 @@ export const SessionScreen: React.FC = () => {
                       alt="Simulated Peer Video"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-xs font-mono-ledger font-bold flex items-center gap-2">
+                    <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-[10px] sm:text-xs font-mono-ledger font-bold flex items-center gap-1.5 sm:gap-2 z-20">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span>Alex Rivera (Simulated Peer Video Feed)</span>
+                      <span>Alex Rivera (Peer Video Feed)</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-3.5 p-4 text-center">
+                  <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex-col gap-2.5 sm:gap-3.5 p-3 sm:p-4 text-center">
                     <img
                       src={activeMeeting.instructorAvatar}
                       alt={activeMeeting.instructorName}
-                      className="w-20 sm:w-28 h-20 sm:h-28 rounded-full object-cover border-4 border-amber-500/50 shadow-2xl animate-pulse"
+                      className="w-16 h-16 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-amber-500/50 shadow-2xl animate-pulse"
                     />
                     <div className="space-y-1">
-                      <div className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-200 text-xs font-mono-ledger font-bold inline-flex items-center gap-2">
+                      <div className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-200 text-[10px] sm:text-xs font-mono-ledger font-bold inline-flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                        <span>Waiting for peer on 2nd device to open [{activeMeeting.roomCode}]...</span>
+                        <span>Waiting for peer [{activeMeeting.roomCode}]...</span>
                       </div>
-                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto font-mono-ledger">
-                        Open this room link on another tab/device to establish an instant WebRTC connection.
+                      <p className="text-[10px] sm:text-[11px] text-slate-400 max-w-sm mx-auto font-mono-ledger hidden xs:block">
+                        Open this room link on another tab/device for instant WebRTC connection.
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2 pt-1">
                       <button
                         onClick={copyMeetLink}
-                        className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono-ledger font-bold border border-slate-600 transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] sm:text-xs font-mono-ledger font-bold border border-slate-600 transition-all cursor-pointer flex items-center gap-1.5"
                       >
-                        <Copy className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Copy Room Link</span>
+                        <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" />
+                        <span>Copy Link</span>
                       </button>
                       <button
                         onClick={() => setIsSimulatedPeerActive(!isSimulatedPeerActive)}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                       >
-                        <VideoIcon className="w-3.5 h-3.5" />
-                        <span>{isSimulatedPeerActive ? 'Stop Simulation' : 'Simulate 2nd Peer Video'}</span>
+                        <VideoIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span>{isSimulatedPeerActive ? 'Stop Simulation' : 'Simulate Peer Video'}</span>
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* Local Camera Self View */}
-                <div className="absolute top-4 right-4 w-32 sm:w-48 aspect-video rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl overflow-hidden backdrop-blur-md z-20 group/pip">
+                {/* Local Camera Self Picture-in-Picture (Responsive PiP) */}
+                <div className="absolute top-2 right-2 sm:top-4 sm:right-4 w-24 xs:w-28 sm:w-36 md:w-44 aspect-video rounded-xl sm:rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl overflow-hidden backdrop-blur-md z-20 group/pip">
                   {isCameraActive ? (
                     <video
                       ref={localVideoRef}
@@ -1636,24 +1773,24 @@ export const SessionScreen: React.FC = () => {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center flex-col text-center p-2">
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center mb-1">
+                    <div className="w-full h-full flex items-center justify-center flex-col text-center p-1 sm:p-2">
+                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-emerald-600 text-white font-bold text-[10px] sm:text-xs flex items-center justify-center mb-0.5 sm:mb-1">
                         {currentUser?.name?.[0] || 'U'}
                       </div>
-                      <span className="text-[10px] text-slate-300 font-mono-ledger truncate w-full">You</span>
+                      <span className="text-[9px] sm:text-[10px] text-slate-300 font-mono-ledger truncate w-full">You</span>
                     </div>
                   )}
-                  <div className="absolute bottom-1 left-2 text-[9px] font-mono-ledger text-white/90 flex items-center gap-1">
+                  <div className="absolute bottom-0.5 left-1 sm:bottom-1 sm:left-2 text-[8px] sm:text-[9px] font-mono-ledger text-white/90 flex items-center gap-1">
                     <span className={`w-1.5 h-1.5 rounded-full ${isMuted ? 'bg-rose-500' : 'bg-emerald-400'}`}></span>
-                    <span>{isMuted ? 'Muted' : 'Audio Live'}</span>
+                    <span className="hidden xs:inline">{isMuted ? 'Muted' : 'Audio Live'}</span>
                   </div>
                 </div>
               </div>
             )}
 
             {viewMode === 'grid' && (
-              <div className="w-full h-full grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-4">
-                <div className="relative w-full h-full rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
+              <div className="w-full h-full grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 sm:p-3">
+                <div className="relative w-full h-full rounded-xl sm:rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden min-h-[140px]">
                   {isScreenSharing ? (
                     <video ref={hostVideoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />
                   ) : remoteStream ? (
@@ -1663,35 +1800,35 @@ export const SessionScreen: React.FC = () => {
                   ) : isSimulatedPeerActive ? (
                     <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900&auto=format&fit=crop&q=80" alt="Simulated Peer Video" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="text-center space-y-2 p-2">
-                      <img src={activeMeeting.instructorAvatar} alt={activeMeeting.instructorName} className="w-16 h-16 rounded-full object-cover border-2 border-amber-400 mx-auto" />
-                      <p className="text-xs font-bold text-white">{activeMeeting.instructorName}</p>
+                    <div className="text-center space-y-1.5 p-2">
+                      <img src={activeMeeting.instructorAvatar} alt={activeMeeting.instructorName} className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-amber-400 mx-auto" />
+                      <p className="text-[11px] sm:text-xs font-bold text-white">{activeMeeting.instructorName}</p>
                       <button
                         onClick={() => setIsSimulatedPeerActive(!isSimulatedPeerActive)}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold cursor-pointer hover:bg-emerald-700"
+                        className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[9px] sm:text-[10px] font-bold cursor-pointer hover:bg-emerald-700"
                       >
-                        Simulate Peer Video
+                        Simulate Video
                       </button>
                     </div>
                   )}
-                  <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-950/80 text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${remoteStream || remoteFrameUrl || isSimulatedPeerActive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
-                    <span>{remotePeerInfo?.name || activeMeeting.instructorName}</span>
+                  <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-lg bg-slate-950/80 text-[9px] sm:text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${remoteStream || remoteFrameUrl || isSimulatedPeerActive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
+                    <span className="truncate max-w-[120px]">{remotePeerInfo?.name || activeMeeting.instructorName}</span>
                   </div>
                 </div>
 
-                <div className="relative w-full h-full rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
+                <div className="relative w-full h-full rounded-xl sm:rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden min-h-[140px]">
                   {isCameraActive ? (
                     <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                   ) : (
-                    <div className="text-center space-y-2">
-                      <img src={currentUser?.avatar} alt={currentUser?.name} className="w-20 h-20 rounded-full object-cover border-2 border-emerald-400 mx-auto" />
-                      <p className="text-xs font-bold text-white">{currentUser?.name} (You)</p>
+                    <div className="text-center space-y-1.5 p-2">
+                      <img src={currentUser?.avatar} alt={currentUser?.name} className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-emerald-400 mx-auto" />
+                      <p className="text-[11px] sm:text-xs font-bold text-white">{currentUser?.name} (You)</p>
                     </div>
                   )}
-                  <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-950/80 text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${isMuted ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`}></span>
-                    <span>Learner · {currentUser?.name?.split(' ')[0]}</span>
+                  <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-lg bg-slate-950/80 text-[9px] sm:text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${isMuted ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`}></span>
+                    <span>{currentUser?.name?.split(' ')[0]} (You)</span>
                   </div>
                 </div>
               </div>
@@ -1702,7 +1839,7 @@ export const SessionScreen: React.FC = () => {
             {floatingReactions.map(r => (
               <div
                 key={r.id}
-                className="absolute bottom-16 text-4xl pointer-events-none animate-bounce z-30"
+                className="absolute bottom-12 sm:bottom-16 text-3xl sm:text-4xl pointer-events-none animate-bounce z-30"
                 style={{ left: `${r.left}%`, animationDuration: '1.4s' }}
               >
                 {r.emoji}
@@ -1710,17 +1847,34 @@ export const SessionScreen: React.FC = () => {
             ))}
 
             {handRaised && (
-              <div className="absolute top-4 left-4 px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-900 font-bold text-xs flex items-center gap-1.5 shadow-lg animate-bounce z-30">
-                <Hand className="w-4 h-4" />
-                <span>Hand Raised by {currentUser?.name?.split(' ')[0]}</span>
+              <div className="absolute top-2 left-2 sm:top-4 sm:left-4 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-amber-500 text-slate-900 font-bold text-[10px] sm:text-xs flex items-center gap-1.5 shadow-lg animate-bounce z-30">
+                <Hand className="w-3.5 h-3.5" />
+                <span>Your Hand Raised</span>
               </div>
             )}
 
-            <div className="absolute top-4 left-4 flex items-center gap-2 z-30">
-              <div className="flex bg-slate-900/80 backdrop-blur-md p-1 rounded-xl border border-slate-700">
+            {/* Remote peer hand raised indicator */}
+            {remoteHandRaised && (
+              <div className="absolute top-10 left-2 sm:top-16 sm:left-4 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-orange-500 text-white font-bold text-[10px] sm:text-xs flex items-center gap-1.5 shadow-lg animate-pulse z-30">
+                <Hand className="w-3.5 h-3.5" />
+                <span>✋ {remoteHandRaisedName} raised hand</span>
+              </div>
+            )}
+
+            {/* Remote peer screen sharing indicator */}
+            {remotePeerScreenSharing && (
+              <div className="absolute top-2 right-12 sm:top-4 sm:right-20 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-blue-600 text-white font-bold text-[10px] sm:text-xs flex items-center gap-1.5 shadow-lg z-30">
+                <Share2 className="w-3 h-3" />
+                <span>{remotePeerInfo?.name || 'Peer'} sharing screen</span>
+              </div>
+            )}
+
+            {/* Top View Toggle: Speaker vs Grid */}
+            <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex items-center gap-1.5 z-30">
+              <div className="flex bg-slate-900/85 backdrop-blur-md p-0.5 sm:p-1 rounded-xl border border-slate-700">
                 <button
                   onClick={() => setViewMode('speaker')}
-                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-mono-ledger font-bold transition-colors cursor-pointer ${
+                  className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[9.5px] sm:text-[10.5px] font-mono-ledger font-bold transition-colors cursor-pointer ${
                     viewMode === 'speaker' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -1728,46 +1882,80 @@ export const SessionScreen: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-mono-ledger font-bold transition-colors cursor-pointer ${
+                  className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[9.5px] sm:text-[10.5px] font-mono-ledger font-bold transition-colors cursor-pointer ${
                     viewMode === 'grid' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Grid (50/50)
+                  Grid
                 </button>
               </div>
 
               <button
                 onClick={toggleFullscreen}
-                className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 transition-transform active:scale-95 cursor-pointer"
+                className="p-1 sm:p-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-800 text-white border border-slate-700 transition-transform active:scale-95 cursor-pointer"
                 title={isFullscreen ? 'Exit Full Screen' : 'Full Screen'}
               >
-                <Maximize2 className="w-4 h-4" />
+                <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
 
-            <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-slate-900/80 backdrop-blur-md p-1.5 rounded-2xl border border-slate-700/80 z-30">
-              {['🔥', '💡', '👏', '🚀', '❓'].map(emoji => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => triggerReaction(emoji)}
-                  className="p-1.5 rounded-xl hover:bg-white/20 text-base transition-transform active:scale-125 cursor-pointer"
-                  title={`Send ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
+            {/* Floating Reactions Bar - expanded to 12 emojis in a grid picker */}
+            <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-30">
+              <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-900/85 backdrop-blur-md p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-700/80">
+                {REACTION_EMOJIS.slice(0, 6).map(emoji => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => triggerReaction(emoji)}
+                    className="p-1 sm:p-1.5 rounded-lg hover:bg-white/20 text-xs sm:text-base transition-transform active:scale-125 cursor-pointer"
+                    title={`Send ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+                {/* More emojis toggle */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker(p => !p)}
+                    className="p-1 sm:p-1.5 rounded-lg hover:bg-white/20 text-slate-300 text-xs transition-all cursor-pointer font-bold"
+                    title="More reactions"
+                  >
+                    ＋
+                  </button>
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-8 right-0 bg-slate-900 border border-slate-700 rounded-2xl p-2 grid grid-cols-6 gap-1 shadow-2xl z-40 w-48">
+                      {REACTION_EMOJIS.map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => { triggerReaction(emoji); setShowEmojiPicker(false); }}
+                          className="p-1.5 rounded-lg hover:bg-white/20 text-base transition-transform active:scale-125 cursor-pointer"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="p-2.5 sm:p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shadow-xl">
-            <div className="hidden sm:flex items-center gap-2 text-slate-300 font-mono-ledger text-xs">
-              <span className="font-bold text-amber-400">{formatTimer(seconds)}</span>
-              <span>|</span>
-              <span className="text-slate-400">{activeMeeting.roomCode}</span>
+          {/* ── Meeting Controls Bar (Responsive Strip) ───────────────────── */}
+          <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3 shadow-xl">
+            {/* Top / Left Sub-Bar */}
+            <div className="flex items-center justify-between w-full md:w-auto text-slate-300 font-mono-ledger text-xs gap-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="font-bold text-amber-400">{formatTimer(seconds)}</span>
+              </div>
+              <span className="text-slate-500">|</span>
+              <span className="text-slate-400 font-bold">{activeMeeting.roomCode}</span>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-3 mx-auto sm:mx-0 flex-wrap justify-center">
+            {/* Center Call Actions */}
+            <div className="flex items-center gap-2 sm:gap-3 justify-center flex-wrap">
               <button
                 onClick={() => setIsMuted(!isMuted)}
                 className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
@@ -1799,18 +1987,23 @@ export const SessionScreen: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setHandRaised(!handRaised)}
+                onClick={() => {
+                  const newRaised = !handRaised;
+                  setHandRaised(newRaised);
+                  if (newRaised) showToast('Hand raised! The host can see your request.', 'info');
+                  else showToast('Hand lowered.', 'info');
+                }}
                 className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
                   handRaised ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
-                title="Raise Hand"
+                title={handRaised ? 'Lower Hand' : 'Raise Hand'}
               >
                 <Hand className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
               <button
                 onClick={toggleFullscreen}
-                className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md active:scale-95 cursor-pointer hidden sm:flex ${
                   isFullscreen ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
                 title="Full Screen Video"
@@ -1824,112 +2017,186 @@ export const SessionScreen: React.FC = () => {
                 title="Leave Meeting"
               >
                 <PhoneOff className="w-4 h-4" />
-                <span className="hidden sm:inline">Leave</span>
+                <span>Leave</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-1.5 mx-auto sm:mx-0">
+            {/* Collaborative Tool Toggles (Chat, Whiteboard, Code Sandbox, AI Copilot) */}
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2 w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-slate-800/80">
               <button
-                onClick={() => setActiveSidePanel(activeSidePanel === 'chat' ? null : 'chat')}
-                className={`p-2 sm:p-2.5 rounded-2xl border transition-colors cursor-pointer ${
+                onClick={() => {
+                  setActiveSidePanel(activeSidePanel === 'chat' ? null : 'chat');
+                  if (activeSidePanel !== 'chat') setChatUnreadCount(0);
+                }}
+                className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold relative ${
                   activeSidePanel === 'chat' ? 'bg-amber-500 text-slate-900 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
                 title="In-Call Chat"
               >
                 <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Chat</span>
+                {chatUnreadCount > 0 && activeSidePanel !== 'chat' && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                  </span>
+                )}
               </button>
 
               <button
                 onClick={() => setActiveSidePanel(activeSidePanel === 'whiteboard' ? null : 'whiteboard')}
-                className={`p-2 sm:p-2.5 rounded-2xl border transition-colors cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
                   activeSidePanel === 'whiteboard' ? 'bg-amber-500 text-slate-900 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
                 title="Collaborative Whiteboard"
               >
                 <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Board</span>
               </button>
 
               <button
                 onClick={() => setActiveSidePanel(activeSidePanel === 'code' ? null : 'code')}
-                className={`p-2 sm:p-2.5 rounded-2xl border transition-colors cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
                   activeSidePanel === 'code' ? 'bg-amber-500 text-slate-900 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
                 title="Code Sandbox"
               >
                 <Code className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Code</span>
               </button>
 
               <button
                 onClick={() => setActiveSidePanel(activeSidePanel === 'copilot' ? null : 'copilot')}
-                className={`p-2 sm:p-2.5 rounded-2xl border transition-colors cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
                   activeSidePanel === 'copilot' ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
                 title="AI Copilot & Transcript"
               >
-                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                <span className="hidden xs:inline">AI</span>
               </button>
             </div>
           </div>
         </div>
 
+        {/* ── Collaborative Side Panels (Chat, Whiteboard, Code, Copilot) ── */}
         {activeSidePanel && (
-          <div className="lg:col-span-4 paper-card p-5 bg-white border border-slate-200 rounded-3xl shadow-lg space-y-4 max-h-[82vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-display font-bold text-sm text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                {activeSidePanel === 'chat' && <MessageSquare className="w-4 h-4 text-amber-600" />}
-                {activeSidePanel === 'whiteboard' && <Edit3 className="w-4 h-4 text-blue-600" />}
-                {activeSidePanel === 'code' && <Code className="w-4 h-4 text-emerald-600" />}
-                {activeSidePanel === 'copilot' && <Sparkles className="w-4 h-4 text-emerald-600" />}
-                <span>
-                  {activeSidePanel === 'chat' && 'In-Call Messages'}
-                  {activeSidePanel === 'whiteboard' && 'Collaborative Board'}
-                  {activeSidePanel === 'code' && 'Live Code Sandbox'}
-                  {activeSidePanel === 'copilot' && 'AI Transcript Copilot'}
-                </span>
-              </h3>
+          <div className="lg:col-span-4 w-full paper-card p-4 sm:p-5 bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-lg space-y-3 sm:space-y-4 max-h-[75vh] sm:max-h-[82vh] overflow-y-auto">
+            {/* Quick Switch Tabs inside Side Panel */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2 flex-wrap">
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                {[
+                  { id: 'chat', label: 'Chat', icon: MessageSquare },
+                  { id: 'whiteboard', label: 'Board', icon: Edit3 },
+                  { id: 'code', label: 'Code', icon: Code },
+                  { id: 'copilot', label: 'AI Notes', icon: Sparkles },
+                ].map(tabItem => {
+                  const Icon = tabItem.icon;
+                  const isActive = activeSidePanel === tabItem.id;
+                  return (
+                    <button
+                      key={tabItem.id}
+                      onClick={() => setActiveSidePanel(tabItem.id as any)}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{tabItem.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               <button
                 onClick={() => setActiveSidePanel(null)}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                title="Close Side Panel"
               >
                 ✕
               </button>
             </div>
 
+            {/* In-Call Live Chat Panel */}
             {activeSidePanel === 'chat' && (
               <div className="space-y-3">
-                <div className="h-80 overflow-y-auto space-y-3 pr-1 text-xs">
+                <div className="h-64 sm:h-80 overflow-y-auto space-y-2 pr-1 text-xs font-sans">
                   {inCallMessages.map((m, idx) => (
                     <div
                       key={idx}
-                      className={`p-3 rounded-2xl leading-relaxed ${
-                        m.isMe ? 'bg-slate-900 text-white ml-6' : 'bg-slate-100 text-slate-900 mr-6'
+                      className={`flex gap-2 ${
+                        m.isMe ? 'flex-row-reverse' : 'flex-row'
                       }`}
                     >
-                      <div className="flex items-center justify-between text-[10px] font-mono-ledger opacity-70 mb-1">
-                        <span>{m.sender}</span>
-                        <span>{m.time}</span>
+                      {/* Avatar */}
+                      {m.avatar ? (
+                        <img
+                          src={m.avatar}
+                          alt={m.sender}
+                          className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">
+                          {m.sender === '🖥️ System' ? '🖥️' : m.sender?.[0]?.toUpperCase() || '?'}
+                        </div>
+                      )}
+                      <div className={`max-w-[80%] ${m.isMe ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[10px] font-semibold font-mono-ledger ${
+                            m.isMe ? 'text-emerald-700' : m.sender === '🖥️ System' ? 'text-blue-600' : 'text-slate-600'
+                          }`}>
+                            {m.isMe ? 'You' : m.sender}
+                          </span>
+                          <span className="text-[9px] text-slate-400">{m.time}</span>
+                        </div>
+                        <div className={`px-3 py-2 rounded-2xl leading-relaxed text-[12px] ${
+                          m.isMe
+                            ? 'bg-emerald-600 text-white rounded-tr-sm'
+                            : m.sender === '🖥️ System'
+                            ? 'bg-blue-50 text-blue-800 border border-blue-100 italic'
+                            : 'bg-slate-100 text-slate-900 rounded-tl-sm'
+                        }`}>
+                          {m.text}
+                        </div>
                       </div>
-                      <p>{m.text}</p>
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
 
-                <form onSubmit={handleSendInCallMessage} className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                {/* Emoji quick-insert row */}
+                <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                  {['😄', '👍', '🔥', '💡', '🎉', '❓', '👏', '🤔'].map(e => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => setInCallInput(prev => prev + e)}
+                      className="text-base hover:scale-125 transition-transform cursor-pointer shrink-0"
+                      title={`Add ${e}`}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+
+                <form onSubmit={handleSendInCallMessage} className="flex items-center gap-2 pt-1 border-t border-slate-100">
                   <input
                     type="text"
-                    placeholder="Send a message to everyone..."
+                    placeholder="Type a message..."
                     value={inCallInput}
                     onChange={e => setInCallInput(e.target.value)}
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { handleSendInCallMessage(e as any); } }}
+                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 transition-colors"
                   />
-                  <button type="submit" className="p-2 rounded-xl bg-slate-900 text-white cursor-pointer">
+                  <button type="submit" disabled={!inCallInput.trim()} className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs disabled:opacity-40 transition-colors">
                     <Send className="w-3.5 h-3.5" />
                   </button>
                 </form>
               </div>
             )}
 
+            {/* Collaborative Whiteboard Panel */}
             {activeSidePanel === 'whiteboard' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-1 flex-wrap">
@@ -1948,16 +2215,16 @@ export const SessionScreen: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <button onClick={downloadCanvasImage} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
+                    <button onClick={downloadCanvasImage} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer" title="Download Board">
                       <Download className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={clearCanvas} className="px-2 py-1 text-[11px] rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
+                    <button onClick={clearCanvas} className="px-2 py-1 text-[11px] font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
                       Clear
                     </button>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-inner">
+                <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-inner touch-none">
                   <canvas
                     ref={canvasRef}
                     onMouseDown={startDrawing}
@@ -1973,14 +2240,15 @@ export const SessionScreen: React.FC = () => {
               </div>
             )}
 
+            {/* Live Code Sandbox Panel */}
             {activeSidePanel === 'code' && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono-ledger text-emerald-600 font-bold">{selectedPreset.name}</span>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-mono-ledger text-emerald-700 font-bold truncate">{selectedPreset.name}</span>
                   <button
                     onClick={handleRunCode}
                     disabled={isRunningCode}
-                    className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
+                    className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
                   >
                     <Play className="w-3 h-3 fill-white" />
                     <span>{isRunningCode ? 'Running...' : 'Run Code'}</span>
@@ -1990,17 +2258,18 @@ export const SessionScreen: React.FC = () => {
                 <textarea
                   value={codeContent}
                   onChange={e => setCodeContent(e.target.value)}
-                  rows={8}
+                  rows={7}
                   className="w-full p-3 rounded-2xl bg-slate-950 border border-slate-800 font-mono-ledger text-xs text-emerald-400 focus:outline-none leading-relaxed resize-none"
                   spellCheck={false}
                 />
 
-                <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 font-mono-ledger text-xs text-emerald-300 whitespace-pre-wrap">
+                <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 font-mono-ledger text-[11px] text-emerald-300 whitespace-pre-wrap max-h-36 overflow-y-auto">
                   {consoleOutput}
                 </div>
               </div>
             )}
 
+            {/* AI Copilot & Real-Time Notes Panel */}
             {activeSidePanel === 'copilot' && (
               <div className="space-y-3">
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] font-mono-ledger">
@@ -2020,7 +2289,7 @@ export const SessionScreen: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="h-64 overflow-y-auto space-y-2.5 text-xs pr-1">
+                <div className="h-56 sm:h-64 overflow-y-auto space-y-2.5 text-xs pr-1 font-sans">
                   {aiChatMessages.map((m, i) => (
                     <div
                       key={i}
@@ -2034,7 +2303,7 @@ export const SessionScreen: React.FC = () => {
                         <span>{m.sender === 'ai' ? '🤖 AI COPILOT' : 'YOU'}</span>
                         <span>{m.time}</span>
                       </div>
-                      <p className="text-[11.5px] font-sans">{m.text}</p>
+                      <p className="text-[11.5px] font-sans leading-relaxed">{m.text}</p>
                     </div>
                   ))}
                   {isAiThinking && (
@@ -2050,7 +2319,7 @@ export const SessionScreen: React.FC = () => {
                     e.preventDefault();
                     handleSendAiQuery();
                   }}
-                  className="flex items-center gap-1.5 pt-1"
+                  className="flex items-center gap-1.5 pt-1 border-t border-slate-100"
                 >
                   <input
                     type="text"
@@ -2059,7 +2328,7 @@ export const SessionScreen: React.FC = () => {
                     onChange={e => setAiQueryInput(e.target.value)}
                     className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
                   />
-                  <button type="submit" className="p-2 rounded-xl bg-emerald-600 text-white cursor-pointer">
+                  <button type="submit" className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-xs">
                     <Send className="w-3.5 h-3.5" />
                   </button>
                 </form>
@@ -2069,106 +2338,129 @@ export const SessionScreen: React.FC = () => {
         )}
       </div>
 
+      {/* ── RETENTION MICRO-QUIZ & MINT BLOCK MODAL ────────────────────── */}
       {showQuizModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in"
           onClick={() => setShowQuizModal(false)}
         >
           <div
-            className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto animate-scale-up"
+            className="w-full max-w-lg max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-              <div>
-                <span className="text-[10px] font-mono-ledger font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Proof of Learning
-                </span>
-                <h3 className="font-display font-bold text-lg text-slate-900 mt-1">
-                  Retention Micro-Quiz & SHA-256 Mint
-                </h3>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-base sm:text-lg text-slate-900">
+                    Retention Quiz & Mint
+                  </h3>
+                  <span className="text-[10px] font-mono-ledger text-slate-500 uppercase font-bold">
+                    Proof of Learning • {activeMeeting.skill}
+                  </span>
+                </div>
               </div>
               <button
                 onClick={() => setShowQuizModal(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {!quizSubmitted ? (
-              <div className="space-y-5">
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Complete the 3-question retention drill for <strong>{activeMeeting.skill}</strong>. Scoring ≥66% will mint a verifiable certificate block to the ledger.
-                </p>
-
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              {!quizSubmitted ? (
                 <div className="space-y-4">
-                  {QUIZ_QUESTIONS.map((q, qIdx) => (
-                    <div key={qIdx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <p className="font-bold text-xs text-slate-900">
-                        {qIdx + 1}. {q.q}
-                      </p>
-                      <div className="space-y-1.5">
-                        {q.options.map((opt, optIdx) => (
-                          <label
-                            key={optIdx}
-                            className={`flex items-center gap-2.5 p-2 rounded-xl text-xs border transition-all cursor-pointer ${
-                              quizAnswers[qIdx] === optIdx
-                                ? 'bg-emerald-50 border-emerald-400 font-semibold text-emerald-950 shadow-2xs'
-                                : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name={`question-${qIdx}`}
-                              checked={quizAnswers[qIdx] === optIdx}
-                              onChange={() => setQuizAnswers(prev => ({ ...prev, [qIdx]: optIdx }))}
-                              className="text-emerald-600 focus:ring-emerald-600"
-                            />
-                            <span>{opt}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleFinishQuiz}
-                  className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-md active:scale-98 cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Award className="w-4 h-4" />
-                  <span>Submit Answers & Mint Block</span>
-                </button>
-              </div>
-            ) : (
-              <div className="text-center space-y-4 py-2">
-                <div className="w-16 h-16 rounded-3xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600">
-                  <CheckCircle2 className="w-8 h-8" />
-                </div>
-                <div>
-                  <h4 className="font-display font-bold text-xl text-slate-900">Quiz Passed · Score: {quizScore}%</h4>
-                  <p className="text-xs text-slate-500 mt-1">Cryptographic certificate issued to your immutable ledger.</p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-slate-900 text-emerald-400 font-mono-ledger text-xs text-left space-y-1.5">
-                  <div className="flex items-center justify-between text-slate-400 text-[10px] pb-1 border-b border-slate-800">
-                    <span>BLOCK HASH</span>
-                    <span className="text-emerald-400">IMMUTABLE PROOF</span>
-                  </div>
-                  <p className="text-[11px] break-all">{mintedHash || '0000a7b4e89fc192d4f8e6b12a39c4d5e8912'}</p>
-                  <p className="text-[10px] text-slate-400">
-                    Learner: {currentUser?.name} • Skill: {activeMeeting.skill} • Verified by Peer AI
+                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-2xl border border-slate-200 font-sans">
+                    Complete the 3-question drill for <strong>{activeMeeting.skill}</strong>. Scoring ≥66% will mint a verifiable certificate block to the ledger.
                   </p>
-                </div>
 
+                  <div className="space-y-3.5">
+                    {QUIZ_QUESTIONS.map((q, qIdx) => (
+                      <div key={qIdx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                        <p className="font-bold text-xs text-slate-900">
+                          {qIdx + 1}. {q.q}
+                        </p>
+                        <div className="space-y-1.5">
+                          {q.options.map((opt, optIdx) => (
+                            <label
+                              key={optIdx}
+                              className={`flex items-center gap-2.5 p-2.5 rounded-xl text-xs border transition-all cursor-pointer ${
+                                quizAnswers[qIdx] === optIdx
+                                  ? 'bg-emerald-50 border-emerald-400 font-semibold text-emerald-950 shadow-2xs'
+                                  : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name={`question-${qIdx}`}
+                                checked={quizAnswers[qIdx] === optIdx}
+                                onChange={() => setQuizAnswers(prev => ({ ...prev, [qIdx]: optIdx }))}
+                                className="text-emerald-600 focus:ring-emerald-600"
+                              />
+                              <span>{opt}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center space-y-4 py-2">
+                  <div className="w-16 h-16 rounded-3xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600">
+                    <CheckCircle2 className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h4 className="font-display font-bold text-lg text-slate-900">Quiz Passed · Score: {quizScore}%</h4>
+                    <p className="text-xs text-slate-500 mt-1">Cryptographic certificate issued to your immutable ledger.</p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-900 text-emerald-400 font-mono-ledger text-xs text-left space-y-1.5">
+                    <div className="flex items-center justify-between text-slate-400 text-[10px] pb-1 border-b border-slate-800">
+                      <span>BLOCK HASH</span>
+                      <span className="text-emerald-400">IMMUTABLE PROOF</span>
+                    </div>
+                    <p className="text-[11px] break-all">{mintedHash || '0000a7b4e89fc192d4f8e6b12a39c4d5e8912'}</p>
+                    <p className="text-[10px] text-slate-400">
+                      Learner: {currentUser?.name} • Skill: {activeMeeting.skill} • Verified by Peer AI
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
+              {!quizSubmitted ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuizModal(false)}
+                    className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFinishQuiz}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Submit Answers & Mint Block</span>
+                  </button>
+                </>
+              ) : (
                 <button
+                  type="button"
                   onClick={() => setShowQuizModal(false)}
-                  className="px-6 py-2.5 rounded-full bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                 >
                   Return to Live Meeting
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

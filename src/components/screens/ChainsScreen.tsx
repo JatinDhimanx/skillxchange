@@ -295,65 +295,67 @@ export const ChainsScreen: React.FC = () => {
       {/* Modal: Create Forward Commitment */}
       {showCommitModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => setShowCommitModal(false)}
         >
           <div
-            className="paper-card p-6 sm:p-8 max-w-md w-full space-y-6 shadow-2xl bg-white border border-slate-200 animate-in zoom-in-95 duration-200"
+            className="w-full max-w-md max-h-[90vh] flex flex-col bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
               <h3 className="font-display font-bold text-lg text-slate-900">
                 Create Skill Future Commitment
               </h3>
               <button
                 onClick={() => setShowCommitModal(false)}
-                className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 font-bold"
               >
-                ✕ Close
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateCommitment} className="space-y-4 text-xs font-sans">
-              <div className="space-y-1.5">
-                <label className="text-slate-800 font-bold">Skill You Want to Learn Right Now:</label>
-                <input
-                  type="text"
-                  value={learningSkill}
-                  onChange={e => setLearningSkill(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500"
-                  required
-                />
+            <form onSubmit={handleCreateCommitment} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs font-sans">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                <div className="space-y-1.5">
+                  <label className="text-slate-800 font-bold">Skill You Want to Learn Right Now:</label>
+                  <input
+                    type="text"
+                    value={learningSkill}
+                    onChange={e => setLearningSkill(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-800 font-bold">Skill You Promise to Teach Once Intermediate:</label>
+                  <input
+                    type="text"
+                    value={teachingSkill}
+                    onChange={e => setTeachingSkill(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-800 font-bold font-mono-ledger">Maturity Window (Days):</label>
+                  <input
+                    type="number"
+                    min={14}
+                    max={120}
+                    value={maturityDays}
+                    onChange={e => setMaturityDays(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500 font-mono-ledger font-bold"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-slate-800 font-bold">Skill You Promise to Teach Once Intermediate:</label>
-                <input
-                  type="text"
-                  value={teachingSkill}
-                  onChange={e => setTeachingSkill(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-slate-800 font-bold font-mono-ledger">Maturity Window (Days):</label>
-                <input
-                  type="number"
-                  min={14}
-                  max={120}
-                  value={maturityDays}
-                  onChange={e => setMaturityDays(Number(e.target.value))}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500 font-mono-ledger font-bold"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowCommitModal(false)}
-                  className="px-4 py-2 rounded-full bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"
+                  className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50"
                 >
                   Cancel
                 </button>

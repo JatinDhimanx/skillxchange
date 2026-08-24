@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   GraduationCap,
@@ -55,78 +55,69 @@ interface CampusNoticeRequest {
 const DEFAULT_STUDY_CIRCLES: CampusStudyCircle[] = [
   {
     id: 'circle-1',
-    name: 'DSA & LeetCode Hard Sprint',
-    college: 'IIT Delhi',
+    name: 'AI & Neural Systems Group',
+    college: 'BMS Institute of Technology',
     department: 'Computer Science',
-    topic: 'Dynamic Programming & Graphs',
-    leadMentor: 'Aarav Sharma',
-    membersCount: 14,
-    maxMembers: 20,
-    meetingTime: 'Tues & Thurs @ 7:00 PM',
-    description: 'Weekly peer mock interviews, code walkthroughs, and hard graph problem breakdown sessions.',
+    topic: 'PyTorch, CUDA optimizations & Vision Transformers',
+    leadMentor: 'Alex Rivera',
+    membersCount: 18,
+    maxMembers: 25,
+    meetingTime: 'Wednesdays @ 5:30 PM',
+    description: 'Weekly hands-on paper reading and PyTorch model building session. Open to all semester students.',
+    joined: true,
   },
   {
     id: 'circle-2',
-    name: 'Applied Machine Learning & LLM Guild',
-    college: 'BITS Pilani',
-    department: 'AI & Data Science',
-    topic: 'PyTorch & Fine-Tuning',
+    name: 'Design Tokens & UI Guild',
+    college: 'IIT Delhi',
+    department: 'Design & Media',
+    topic: 'Figma AutoLayout, React Tokens & Micro-Interactions',
     leadMentor: 'Priya Sharma',
-    membersCount: 19,
-    maxMembers: 25,
-    meetingTime: 'Saturdays @ 5:00 PM',
-    description: 'Hands-on exploration of LoRA fine-tuning, retrieval-augmented generation, and deployment pipelines.',
+    membersCount: 24,
+    maxMembers: 30,
+    meetingTime: 'Fridays @ 6:00 PM',
+    description: 'Peer critiques of UX portfolios, Figma component libraries, and interactive frontend prototypes.',
+    joined: false,
   },
   {
     id: 'circle-3',
-    name: 'UI/UX & Interactive Design Studio',
-    college: 'BMS Institute of Technology',
-    department: 'Design & Media',
-    topic: 'Figma Systems & Motion UI',
-    leadMentor: 'Rohan Patel',
+    name: 'Acoustic Sound & Ear Training',
+    college: 'BITS Pilani',
+    department: 'Performing Arts',
+    topic: 'Fingerstyle arrangement, chord chemistry & audio DSP',
+    leadMentor: 'Rohan Mehta',
     membersCount: 12,
     maxMembers: 15,
-    meetingTime: 'Wednesdays @ 6:30 PM',
-    description: 'Critique circles, design system token architecture, and Figma auto-layout best practices.',
-  },
-  {
-    id: 'circle-4',
-    name: 'Systems & Kernel Hacking Circle',
-    college: 'Delhi Technological University',
-    department: 'Software Engineering',
-    topic: 'Rust & OS Internals',
-    leadMentor: 'Devendra Rao',
-    membersCount: 8,
-    maxMembers: 12,
-    meetingTime: 'Sundays @ 11:00 AM',
-    description: 'Operating systems lab assignments, concurrent memory models, and Rust async runtime analysis.',
+    meetingTime: 'Sundays @ 4:00 PM',
+    description: 'Learn acoustic guitar tab notation, rhythm synchronization, and practice mutual feedback jams.',
+    joined: false,
   },
 ];
 
 const DEFAULT_CAMPUS_REQUESTS: CampusNoticeRequest[] = [
   {
     id: 'req-1',
-    authorName: 'Ananya Verma',
+    authorName: 'Aarav Patel',
     authorCollege: 'IIT Delhi',
-    authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    subject: 'Computer Networks (OSI & Socket Programming in C)',
-    description: 'Need help debugging TCP multi-threaded socket server before semester lab evaluation this Friday.',
+    authorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    subject: 'Need help with NumPy Vectorization Lab Test prep',
+    description: 'Looking for a 1-hour session to understand matrix slicing and SIMD execution before my midterms.',
     creditReward: 1.5,
-    urgency: 'This Week',
+    urgency: 'Today',
     datePosted: '2 hours ago',
-    responsesCount: 3,
+    responsesCount: 4,
   },
   {
     id: 'req-2',
-    authorName: 'Vikram Mehta',
+    authorName: 'Ananya Rao',
     authorCollege: 'BITS Pilani',
-    authorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    subject: 'Linear Algebra & Principal Component Analysis (PCA)',
-    description: 'Looking for a peer to explain SVD mathematical decomposition intuition and NumPy matrix factorization.',
-    creditReward: 2.0,
-    urgency: 'Today',
+    authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    subject: 'Learn Figma to Tailwind Component Mapping',
+    description: 'Can offer 1.5 credits or exchange for conversational Spanish mentoring.',
+    creditReward: 1.5,
+    urgency: 'This Week',
     datePosted: '5 hours ago',
-    responsesCount: 5,
+    responsesCount: 1,
   },
   {
     id: 'req-3',
@@ -148,6 +139,8 @@ export const CollegeHub: React.FC = () => {
     allUsers,
     openChatWithPeer,
     invitePeerToStudyRoom,
+    sendExchangeProposal,
+    updateCurrentUserFullProfile,
     showToast,
   } = useApp();
 
@@ -162,6 +155,26 @@ export const CollegeHub: React.FC = () => {
   // Modals
   const [showCreateCircleModal, setShowCreateCircleModal] = useState(false);
   const [showPostRequestModal, setShowPostRequestModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [selectedCircleForModal, setSelectedCircleForModal] = useState<CampusStudyCircle | null>(null);
+  const [selectedRequestForHelp, setSelectedRequestForHelp] = useState<CampusNoticeRequest | null>(null);
+  const [selectedPeerForProfile, setSelectedPeerForProfile] = useState<UserProfile | null>(null);
+
+  // Verification Form State
+  const [verifyEduEmail, setVerifyEduEmail] = useState('');
+  const [verifyCollege, setVerifyCollege] = useState(currentUser.college || 'IIT Delhi');
+  const [verifyRollNumber, setVerifyRollNumber] = useState('2024CSB1042');
+  const [verifyDept, setVerifyDept] = useState('Computer Science & Engineering');
+  const [isVerifyingEdu, setIsVerifyingEdu] = useState(false);
+
+  // Help Proposal Modal State
+  const [helpMessage, setHelpMessage] = useState('');
+  const [helpProposedTime, setHelpProposedTime] = useState('Today @ 6:00 PM');
+
+  // Peer Quick Swap Modal State
+  const [peerSwapOfferedSkill, setPeerSwapOfferedSkill] = useState('');
+  const [peerSwapWantedSkill, setPeerSwapWantedSkill] = useState('');
+  const [peerSwapNotes, setPeerSwapNotes] = useState('');
 
   // New Circle Form
   const [circleName, setCircleName] = useState('');
@@ -200,6 +213,15 @@ export const CollegeHub: React.FC = () => {
 
     return matchesCollege && matchesSearch;
   });
+
+  // Dynamically sorted leaderboard based on teaching hours and trust scores
+  const leaderboardUsers = useMemo(() => {
+    return [...collegeUsers].sort((a, b) => {
+      const scoreA = (a.teachingHours || 0) * 10 + (a.trustScore?.overallScore || 0);
+      const scoreB = (b.teachingHours || 0) * 10 + (b.trustScore?.overallScore || 0);
+      return scoreB - scoreA;
+    });
+  }, [collegeUsers]);
 
   // Filtered Circles
   const filteredCircles = studyCircles.filter(c => {
@@ -243,20 +265,57 @@ export const CollegeHub: React.FC = () => {
     showToast('Study Circle membership updated! 🎓', 'success');
   };
 
-  // Help Peer Request
-  const handleHelpPeer = (req: CampusNoticeRequest) => {
+  // Open Help Proposal Modal
+  const handleOpenHelpModal = (req: CampusNoticeRequest) => {
+    setSelectedRequestForHelp(req);
+    setHelpMessage(`Hi ${req.authorName}, I can help you with ${req.subject}! Let's sync up.`);
+  };
+
+  // Submit Mentorship Help Offer
+  const handleConfirmHelpOffer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRequestForHelp) return;
+
     setCampusRequests(prev =>
-      prev.map(r => (r.id === req.id ? { ...r, responded: true, responsesCount: r.responsesCount + 1 } : r))
+      prev.map(r => (r.id === selectedRequestForHelp.id ? { ...r, responded: true, responsesCount: r.responsesCount + 1 } : r))
     );
     openChatWithPeer({
-      id: `peer-${req.authorName.toLowerCase().replace(/\s+/g, '-')}`,
-      name: req.authorName,
-      avatar: req.authorAvatar,
-      skill: req.subject,
-      college: req.authorCollege,
+      id: `peer-${selectedRequestForHelp.authorName.toLowerCase().replace(/\s+/g, '-')}`,
+      name: selectedRequestForHelp.authorName,
+      avatar: selectedRequestForHelp.authorAvatar,
+      skill: selectedRequestForHelp.subject,
+      college: selectedRequestForHelp.authorCollege,
       status: 'online',
     });
-    showToast(`Connected with ${req.authorName} to assist on "${req.subject}"! 💬`, 'success');
+    showToast(`Mentorship offer sent to ${selectedRequestForHelp.authorName}! +${selectedRequestForHelp.creditReward} Credits locked in escrow. 💬`, 'success');
+    setSelectedRequestForHelp(null);
+  };
+
+  // Submit Institutional Verification
+  const handleVerifyEduSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifyingEdu(true);
+    try {
+      await updateCurrentUserFullProfile({
+        college: verifyCollege.trim(),
+      });
+      showToast(`Institutional .EDU badge verified for ${verifyCollege}! 🎓`, 'success');
+      setShowVerificationModal(false);
+    } catch {
+      showToast('Could not verify institutional email.', 'warning');
+    } finally {
+      setIsVerifyingEdu(false);
+    }
+  };
+
+  // Handle Quick Swap Proposal from Peer Modal
+  const handleSendPeerSwapProposal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPeerForProfile) return;
+    const offered = peerSwapOfferedSkill || currentUser.skillsToTeach[0]?.skillName || 'General Mentorship';
+    const wanted = peerSwapWantedSkill || selectedPeerForProfile.skillsToTeach[0]?.skillName || 'Technical Guidance';
+    sendExchangeProposal(selectedPeerForProfile.id, offered, wanted, peerSwapNotes);
+    setSelectedPeerForProfile(null);
   };
 
   // Submit New Circle
@@ -367,9 +426,15 @@ export const CollegeHub: React.FC = () => {
               <span className="font-display font-bold text-sm text-slate-900">
                 {currentUser.college || 'IIT Delhi'}
               </span>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono-ledger font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                Institutional .EDU Verified
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowVerificationModal(true)}
+                className="px-2.5 py-0.5 rounded-md text-[10px] font-mono-ledger font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all cursor-pointer flex items-center gap-1"
+                title="Click to view or edit campus verification details"
+              >
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Institutional .EDU Verified ⚡</span>
+              </button>
             </div>
             <span className="text-xs text-slate-500 font-sans">
               Peer ID: <strong className="text-slate-700 font-mono-ledger">{currentUser.handle || '@peer_member'}</strong>
@@ -473,7 +538,8 @@ export const CollegeHub: React.FC = () => {
             collegeUsers.map(user => (
               <div
                 key={user.id}
-                className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                onClick={() => setSelectedPeerForProfile(user)}
+                className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between space-y-4 cursor-pointer"
               >
                 <div className="space-y-3">
                   {/* Avatar & Header */}
@@ -525,7 +591,8 @@ export const CollegeHub: React.FC = () => {
                 {/* Actions */}
                 <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
                   <button
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.stopPropagation();
                       openChatWithPeer({
                         id: user.id,
                         name: user.name,
@@ -533,8 +600,8 @@ export const CollegeHub: React.FC = () => {
                         skill: user.skillsToTeach[0]?.skillName || 'General Tech',
                         college: user.college,
                         status: 'online',
-                      })
-                    }
+                      });
+                    }}
                     className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer font-sans"
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
@@ -542,13 +609,13 @@ export const CollegeHub: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => {
-                      invitePeerToStudyRoom(user.id, user.skillsToTeach[0]?.skillName || 'Peer Exchange');
-                      showToast(`Invited ${user.name} to live study session! 🚀`, 'success');
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPeerForProfile(user);
                     }}
                     className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 font-sans"
                   >
-                    <span>Request</span>
+                    <span>Swap Details</span>
                   </button>
                 </div>
               </div>
@@ -563,7 +630,8 @@ export const CollegeHub: React.FC = () => {
           {filteredCircles.map(circle => (
             <div
               key={circle.id}
-              className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+              onClick={() => setSelectedCircleForModal(circle)}
+              className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md hover:border-purple-200 transition-all flex flex-col justify-between space-y-4 cursor-pointer"
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -610,7 +678,10 @@ export const CollegeHub: React.FC = () => {
                 </span>
 
                 <button
-                  onClick={() => toggleJoinCircle(circle.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleJoinCircle(circle.id);
+                  }}
                   className={`px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                     circle.joined
                       ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
@@ -641,7 +712,8 @@ export const CollegeHub: React.FC = () => {
           {filteredRequests.map(req => (
             <div
               key={req.id}
-              className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              onClick={() => handleOpenHelpModal(req)}
+              className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
             >
               <div className="flex items-start gap-3.5">
                 <img
@@ -678,7 +750,10 @@ export const CollegeHub: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => handleHelpPeer(req)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenHelpModal(req);
+                  }}
                   disabled={req.responded}
                   className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer font-sans ${
                     req.responded
@@ -724,10 +799,11 @@ export const CollegeHub: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {collegeUsers.map((user, idx) => (
+            {leaderboardUsers.map((user, idx) => (
               <div
                 key={user.id}
-                className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-100/80 transition-all"
+                onClick={() => setSelectedPeerForProfile(user)}
+                className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-100/80 transition-all cursor-pointer"
               >
                 <div className="flex items-center gap-3.5">
                   <span
@@ -783,9 +859,9 @@ export const CollegeHub: React.FC = () => {
 
       {/* ── CREATE STUDY CIRCLE MODAL ────────────────────────────────────── */}
       {showCreateCircleModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 animate-scale-up">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setShowCreateCircleModal(false)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
                   <Users className="w-5 h-5" />
@@ -796,93 +872,95 @@ export const CollegeHub: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowCreateCircleModal(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCircleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Circle Name *
-                </label>
-                <input
-                  type="text"
-                  value={circleName}
-                  onChange={e => setCircleName(e.target.value)}
-                  placeholder="e.g. Distributed Systems & Raft Paper Study"
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateCircleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Department
+                    Circle Name *
                   </label>
                   <input
                     type="text"
-                    value={circleDept}
-                    onChange={e => setCircleDept(e.target.value)}
-                    placeholder="e.g. Computer Science"
+                    value={circleName}
+                    onChange={e => setCircleName(e.target.value)}
+                    placeholder="e.g. Distributed Systems & Raft Paper Study"
                     className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Department
+                    </label>
+                    <input
+                      type="text"
+                      value={circleDept}
+                      onChange={e => setCircleDept(e.target.value)}
+                      placeholder="e.g. Computer Science"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Meeting Schedule
+                    </label>
+                    <input
+                      type="text"
+                      value={circleTime}
+                      onChange={e => setCircleTime(e.target.value)}
+                      placeholder="e.g. Fridays @ 6:00 PM"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                    Core Topic / Curriculum *
+                  </label>
+                  <input
+                    type="text"
+                    value={circleTopic}
+                    onChange={e => setCircleTopic(e.target.value)}
+                    placeholder="e.g. Paxos, Raft, Byzantine Fault Tolerance"
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    required
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Meeting Schedule
+                    Description
                   </label>
-                  <input
-                    type="text"
-                    value={circleTime}
-                    onChange={e => setCircleTime(e.target.value)}
-                    placeholder="e.g. Fridays @ 6:00 PM"
+                  <textarea
+                    rows={2}
+                    value={circleDesc}
+                    onChange={e => setCircleDesc(e.target.value)}
+                    placeholder="What will members work on together?"
                     className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Core Topic / Curriculum *
-                </label>
-                <input
-                  type="text"
-                  value={circleTopic}
-                  onChange={e => setCircleTopic(e.target.value)}
-                  placeholder="e.g. Paxos, Raft, Byzantine Fault Tolerance"
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Description
-                </label>
-                <textarea
-                  rows={2}
-                  value={circleDesc}
-                  onChange={e => setCircleDesc(e.target.value)}
-                  placeholder="What will members work on together?"
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowCreateCircleModal(false)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                 >
                   Publish Circle 🎓
                 </button>
@@ -894,9 +972,9 @@ export const CollegeHub: React.FC = () => {
 
       {/* ── POST STUDY REQUEST MODAL ─────────────────────────────────────── */}
       {showPostRequestModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 animate-scale-up">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setShowPostRequestModal(false)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                   <MessageSquare className="w-5 h-5" />
@@ -907,86 +985,574 @@ export const CollegeHub: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowPostRequestModal(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handlePostRequestSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Subject / Academic Topic *
-                </label>
-                <input
-                  type="text"
-                  value={requestSubject}
-                  onChange={e => setRequestSubject(e.target.value)}
-                  placeholder="e.g. Database Management Systems (SQL Normalization)"
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handlePostRequestSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Credit Reward
+                    Subject / Academic Topic *
                   </label>
                   <input
-                    type="number"
-                    step="0.5"
-                    min="0.5"
-                    max="10"
-                    value={requestReward}
-                    onChange={e => setRequestReward(Number(e.target.value))}
+                    type="text"
+                    value={requestSubject}
+                    onChange={e => setRequestSubject(e.target.value)}
+                    placeholder="e.g. Database Management Systems (SQL Normalization)"
                     className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    required
                   />
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Credit Reward
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="10"
+                      value={requestReward}
+                      onChange={e => setRequestReward(Number(e.target.value))}
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Urgency
+                    </label>
+                    <select
+                      value={requestUrgency}
+                      onChange={e => setRequestUrgency(e.target.value as any)}
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900 cursor-pointer"
+                    >
+                      <option value="Today">Today (Urgent)</option>
+                      <option value="This Week">This Week</option>
+                      <option value="Flexible">Flexible</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Urgency
+                    Details & What You Need Help With *
                   </label>
-                  <select
-                    value={requestUrgency}
-                    onChange={e => setRequestUrgency(e.target.value as any)}
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900 cursor-pointer"
-                  >
-                    <option value="Today">Today (Urgent)</option>
-                    <option value="This Week">This Week</option>
-                    <option value="Flexible">Flexible</option>
-                  </select>
+                  <textarea
+                    rows={3}
+                    value={requestDesc}
+                    onChange={e => setRequestDesc(e.target.value)}
+                    placeholder="Describe the specific problem or concept you'd like a peer mentor to walk you through..."
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900 leading-relaxed"
+                    required
+                  />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Details & What You Need Help With *
-                </label>
-                <textarea
-                  rows={3}
-                  value={requestDesc}
-                  onChange={e => setRequestDesc(e.target.value)}
-                  placeholder="Describe the specific problem or concept you'd like a peer mentor to walk you through..."
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900 leading-relaxed"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowPostRequestModal(false)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                 >
                   Post to Noticeboard 📌
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── VERIFY INSTITUTIONAL .EDU MODAL ──────────────────────────────── */}
+      {showVerificationModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setShowVerificationModal(false)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <h3 className="font-display font-bold text-lg text-slate-900">
+                  Verify University Student (.EDU)
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowVerificationModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleVerifyEduSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-sans space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Verified Campus Benefits:
+                  </p>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Verify your university credentials to unlock campus study circles, instant peer barter swaps, and institutional leaderboard rankings.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                    University / College Campus *
+                  </label>
+                  <select
+                    value={verifyCollege}
+                    onChange={e => setVerifyCollege(e.target.value)}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-slate-900 cursor-pointer"
+                  >
+                    {collegeList.filter(c => c !== 'All Campuses').map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Department / Major *
+                    </label>
+                    <input
+                      type="text"
+                      value={verifyDept}
+                      onChange={e => setVerifyDept(e.target.value)}
+                      placeholder="e.g. Computer Science"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Roll / Student ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={verifyRollNumber}
+                      onChange={e => setVerifyRollNumber(e.target.value)}
+                      placeholder="e.g. 2024CSB1042"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                    Official University Email (.EDU / .AC.IN) *
+                  </label>
+                  <input
+                    type="email"
+                    value={verifyEduEmail}
+                    onChange={e => setVerifyEduEmail(e.target.value)}
+                    placeholder="e.g. jatin@iitd.ac.in"
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowVerificationModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isVerifyingEdu}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                >
+                  {isVerifyingEdu ? 'Verifying...' : 'Activate .EDU Badge 🎓'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── PEER PROFILE & INSTANT SWAP MODAL ─────────────────────────────── */}
+      {selectedPeerForProfile && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setSelectedPeerForProfile(null)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-3 min-w-0">
+                <img
+                  src={selectedPeerForProfile.avatar}
+                  alt={selectedPeerForProfile.name}
+                  className="w-10 h-10 rounded-2xl object-cover border border-slate-200 shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="font-display font-bold text-base text-slate-900 truncate">
+                      {selectedPeerForProfile.name}
+                    </h3>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  </div>
+                  <span className="text-xs font-mono-ledger text-slate-500 block truncate">
+                    {selectedPeerForProfile.college || 'University Peer'} • {selectedPeerForProfile.handle}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedPeerForProfile(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              <div className="grid grid-cols-3 gap-2.5 text-center">
+                <div className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200">
+                  <span className="text-[10px] font-mono-ledger text-amber-800 uppercase font-bold block">Trust Score</span>
+                  <span className="font-display font-black text-sm text-amber-900">{selectedPeerForProfile.trustScore.overallScore}/100</span>
+                </div>
+                <div className="p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200">
+                  <span className="text-[10px] font-mono-ledger text-emerald-800 uppercase font-bold block">Hours Taught</span>
+                  <span className="font-display font-black text-sm text-emerald-900">{selectedPeerForProfile.teachingHours}h</span>
+                </div>
+                <div className="p-2.5 rounded-2xl bg-purple-50 border border-purple-200">
+                  <span className="text-[10px] font-mono-ledger text-purple-800 uppercase font-bold block">XP Level</span>
+                  <span className="font-display font-black text-sm text-purple-900">{selectedPeerForProfile.xpPoints} XP</span>
+                </div>
+              </div>
+
+              {/* Bio & Headline */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                <span className="text-[10px] font-mono-ledger text-slate-400 uppercase font-bold block">Academic Bio:</span>
+                <p className="text-xs text-slate-700 font-sans leading-relaxed">
+                  {selectedPeerForProfile.bio || selectedPeerForProfile.headline || 'Active campus student exchanging high-demand skills.'}
+                </p>
+              </div>
+
+              {/* Skills They Teach */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                  Skills They Can Teach:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {selectedPeerForProfile.skillsToTeach.map((s, idx) => (
+                    <span
+                      key={idx}
+                      className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 font-mono-ledger text-slate-800 font-bold text-xs flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      {s.skillName} ({s.level})
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Skills They Want To Learn */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                  Skills They Want To Learn:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {selectedPeerForProfile.skillsToLearn.map((s, idx) => (
+                    <span
+                      key={idx}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 font-mono-ledger text-emerald-800 font-bold text-xs"
+                    >
+                      🎯 {s.skillName} ({s.targetLevel})
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quick Barter Form */}
+              <form onSubmit={handleSendPeerSwapProposal} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <span className="text-xs font-mono-ledger font-bold text-slate-900 uppercase block">
+                  Propose 1-on-1 Swap with {selectedPeerForProfile.name}:
+                </span>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-mono-ledger text-slate-600 font-bold">You Teach:</label>
+                    <select
+                      value={peerSwapOfferedSkill}
+                      onChange={e => setPeerSwapOfferedSkill(e.target.value)}
+                      className="w-full p-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 font-mono-ledger"
+                    >
+                      {currentUser.skillsToTeach.map((s, idx) => (
+                        <option key={idx} value={s.skillName}>{s.skillName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-mono-ledger text-slate-600 font-bold">You Learn:</label>
+                    <select
+                      value={peerSwapWantedSkill}
+                      onChange={e => setPeerSwapWantedSkill(e.target.value)}
+                      className="w-full p-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 font-mono-ledger"
+                    >
+                      {selectedPeerForProfile.skillsToTeach.map((s, idx) => (
+                        <option key={idx} value={s.skillName}>{s.skillName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={peerSwapNotes}
+                  onChange={e => setPeerSwapNotes(e.target.value)}
+                  placeholder="Add a quick note or proposed schedule..."
+                  className="w-full p-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                />
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Barter Proposal</span>
+                </button>
+              </form>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  openChatWithPeer({
+                    id: selectedPeerForProfile.id,
+                    name: selectedPeerForProfile.name,
+                    avatar: selectedPeerForProfile.avatar,
+                    skill: selectedPeerForProfile.skillsToTeach[0]?.skillName || 'General Tech',
+                    college: selectedPeerForProfile.college,
+                    status: 'online',
+                  });
+                  setSelectedPeerForProfile(null);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Open Chat</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  invitePeerToStudyRoom(selectedPeerForProfile.id, selectedPeerForProfile.skillsToTeach[0]?.skillName || 'Peer Exchange');
+                  showToast(`Live Study Room invitation sent to ${selectedPeerForProfile.name}! 🚀`, 'success');
+                  setSelectedPeerForProfile(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Launch Live Room</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STUDY CIRCLE DETAIL & JOIN MODAL ──────────────────────────────── */}
+      {selectedCircleForModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setSelectedCircleForModal(null)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <h3 className="font-display font-bold text-lg text-slate-900">
+                  {selectedCircleForModal.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedCircleForModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <span className="text-xs font-mono-ledger font-bold uppercase text-purple-800 bg-purple-50 px-3 py-1 rounded-lg border border-purple-200">
+                  {selectedCircleForModal.department}
+                </span>
+                <span className="text-xs font-mono-ledger font-bold text-slate-500">
+                  {selectedCircleForModal.college}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-mono-ledger uppercase font-bold text-slate-400">Core Topic / Curriculum:</span>
+                <p className="font-bold text-sm text-slate-900 mt-0.5">{selectedCircleForModal.topic}</p>
+              </div>
+
+              <p className="text-xs text-slate-600 font-sans leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                {selectedCircleForModal.description}
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-mono-ledger text-slate-400 uppercase font-bold block">Lead Mentor</span>
+                  <strong className="text-xs text-slate-900 block">{selectedCircleForModal.leadMentor}</strong>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-mono-ledger text-slate-400 uppercase font-bold block">Weekly Schedule</span>
+                  <strong className="text-xs text-slate-900 block">{selectedCircleForModal.meetingTime}</strong>
+                </div>
+              </div>
+
+              {/* Progress bar of members */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-mono-ledger">
+                  <span className="text-slate-500">Capacity & Seats:</span>
+                  <span className="font-bold text-purple-700">{selectedCircleForModal.membersCount} / {selectedCircleForModal.maxMembers} Students</span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"
+                    style={{ width: `${Math.min(100, (selectedCircleForModal.membersCount / selectedCircleForModal.maxMembers) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleJoinCircle(selectedCircleForModal.id);
+                  setSelectedCircleForModal(prev => prev ? { ...prev, joined: !prev.joined, membersCount: prev.joined ? prev.membersCount - 1 : prev.membersCount + 1 } : null);
+                }}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedCircleForModal.joined
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-800'
+                }`}
+              >
+                {selectedCircleForModal.joined ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Member Joined</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Join Circle</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  invitePeerToStudyRoom(`circle-${selectedCircleForModal.id}`, selectedCircleForModal.topic);
+                  showToast(`Live Circle Room opened for ${selectedCircleForModal.name}! 🚀`, 'success');
+                  setSelectedCircleForModal(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span>Enter Live Circle Room</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── OFFER MENTORSHIP & HELP PEER MODAL ────────────────────────────── */}
+      {selectedRequestForHelp && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setSelectedRequestForHelp(null)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Send className="w-5 h-5" />
+                </div>
+                <h3 className="font-display font-bold text-lg text-slate-900">
+                  Offer Mentorship to {selectedRequestForHelp.authorName}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedRequestForHelp(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmHelpOffer} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+                {/* Request Overview */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono-ledger uppercase font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                      {selectedRequestForHelp.urgency}
+                    </span>
+                    <span className="font-display font-black text-sm text-emerald-700">
+                      +{selectedRequestForHelp.creditReward} Credits Reward
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-sm text-slate-900">{selectedRequestForHelp.subject}</h4>
+                  <p className="text-xs text-slate-600 font-sans leading-relaxed">
+                    {selectedRequestForHelp.description}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                    Proposed Session Time *
+                  </label>
+                  <input
+                    type="text"
+                    value={helpProposedTime}
+                    onChange={e => setHelpProposedTime(e.target.value)}
+                    placeholder="e.g. Today @ 6:00 PM (30 mins drill)"
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                    Message to {selectedRequestForHelp.authorName} *
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={helpMessage}
+                    onChange={e => setHelpMessage(e.target.value)}
+                    placeholder="Explain how you will guide them through this academic topic..."
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRequestForHelp(null)}
+                  className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Help Offer & Start Chat</span>
                 </button>
               </div>
             </form>

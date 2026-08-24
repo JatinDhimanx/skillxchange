@@ -9,24 +9,20 @@ import {
   Lock,
   User,
   AtSign,
-  Briefcase,
   Sparkles,
   CheckCircle2,
   AlertCircle,
   ArrowRight,
-  Shield,
+  ArrowLeft,
+  ShieldCheck,
   Eye,
   EyeOff,
-  Zap,
   Check,
-  GraduationCap,
   KeyRound,
-  ArrowLeft,
   Coins,
-  Repeat,
-  Compass,
-  ShieldCheck,
   Video,
+  BadgeCheck,
+  Repeat,
 } from 'lucide-react';
 import { useApp, DEMO_USER_AARAV, DEMO_USER_PRIYA } from '../../context/AppContext';
 import { isSupabaseConfigured } from '../../lib/supabase/client';
@@ -47,23 +43,7 @@ const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
 ];
 
-const POPULAR_TEACH_SKILLS = [
-  { name: 'Python for AI', color: 'bg-blue-50 text-blue-800 border-blue-200' },
-  { name: 'UI/UX & Figma', color: 'bg-rose-50 text-rose-800 border-rose-200' },
-  { name: 'Acoustic Guitar', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-  { name: 'React & Next.js', color: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
-  { name: 'Public Speaking', color: 'bg-amber-50 text-amber-800 border-amber-200' },
-  { name: 'GLSL Shaders', color: 'bg-purple-50 text-purple-800 border-purple-200' },
-];
 
-const POPULAR_LEARN_SKILLS = [
-  { name: 'Machine Learning', color: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
-  { name: 'Japanese Conversation', color: 'bg-red-50 text-red-800 border-red-200' },
-  { name: 'Prompt Engineering', color: 'bg-purple-50 text-purple-800 border-purple-200' },
-  { name: 'Product Design', color: 'bg-rose-50 text-rose-800 border-rose-200' },
-  { name: 'Cloud Architecture', color: 'bg-blue-50 text-blue-800 border-blue-200' },
-  { name: 'Fingerstyle Guitar', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-];
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
@@ -80,16 +60,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [rememberMe, setRememberMe] = useState(true);
 
   // Sign Up Form State
-  const [signUpStep, setSignUpStep] = useState<1 | 2>(1);
   const [fullName, setFullName] = useState('');
   const [handle, setHandle] = useState('');
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
   const [showSignUpPass, setShowSignUpPass] = useState(false);
-  const [headline, setHeadline] = useState('');
-  const [teachSkill, setTeachSkill] = useState('');
-  const [learnSkill, setLearnSkill] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(PRESET_AVATARS[0]);
+  const [emailAlreadyExists, setEmailAlreadyExists] = useState(false);
 
   // Email Verification Screen State
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
@@ -123,6 +100,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setEmailVerificationSent(false);
     setRecoverySent(false);
     setResetSuccess(false);
+    setEmailAlreadyExists(false);
 
     if (typeof window !== 'undefined') {
       const hash = window.location.hash;
@@ -187,7 +165,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleSignUpNext = (e: React.FormEvent) => {
+  const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !signUpEmail || !signUpPassword) {
       setErrorMsg('Please enter your full name, email, and password.');
@@ -197,14 +175,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMsg('Password must be at least 6 characters.');
       return;
     }
-    setErrorMsg(null);
-    setSignUpStep(2);
-  };
-
-  const handleSignUpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
+    setEmailAlreadyExists(false);
     try {
       const cleanHandle = handle.trim() || fullName.toLowerCase().replace(/\s+/g, '');
       const result = await registerUser({
@@ -212,9 +185,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         password: signUpPassword,
         name: fullName,
         handle: cleanHandle,
-        headline: headline || 'Skill Exchange Member',
-        teachSkill: teachSkill.trim() || undefined,
-        learnSkill: learnSkill.trim() || undefined,
+        headline: 'Skill Exchange Member',
         avatar: selectedAvatar,
       });
 
@@ -228,6 +199,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             onClose();
           }, 1000);
         }
+      } else if (result.error === 'EMAIL_ALREADY_REGISTERED') {
+        setEmailAlreadyExists(true);
+        setSignInEmail(signUpEmail);
       } else {
         setErrorMsg(result.error || 'Registration failed. Please verify your details.');
       }
@@ -246,7 +220,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setResendingEmail(false);
     setResendCooldown(60);
     if (!success) {
-      setErrorMsg('Failed to resend email or rate limit reached. Use Instant Verification below if needed.');
+      setErrorMsg('Failed to resend email. Please check your spam folder or wait a moment for Supabase rate limit to reset.');
     }
   };
 
@@ -311,134 +285,162 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }, 600);
   };
 
+  // Shared field styling
+  const fieldClass =
+    'w-full rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 py-3 transition-colors focus:bg-white';
+  const labelClass = 'block text-[13px] font-semibold text-slate-700 mb-1.5';
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Sign in or create an account"
     >
       <div
-        className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden relative grid grid-cols-1 md:grid-cols-12 min-h-0 md:min-h-[580px] max-h-[92vh] animate-scale-up"
+        className="w-full max-w-4xl bg-white rounded-[28px] shadow-2xl ring-1 ring-slate-900/10 overflow-hidden relative grid grid-cols-1 md:grid-cols-12 min-h-0 md:min-h-[600px] max-h-[94vh] animate-fade-scale"
         onClick={e => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          aria-label="Close Modal"
-          className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors z-20"
+          aria-label="Close"
+          className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors z-30"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* ── LEFT SHOWCASE PANEL (Matching HomeScreen Style) ───────────────────────── */}
-        <div className="hidden md:flex md:col-span-5 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] p-8 text-white flex-col justify-between relative overflow-hidden border-r border-slate-800">
-          {/* Subtle Ambient Orbs */}
-          <div className="absolute -top-12 -right-12 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        {/* ── LEFT TRUST PANEL (Deep Navy + Ledger Engraving) ──────────────── */}
+        <div className="hidden md:flex md:col-span-5 relative flex-col justify-between overflow-hidden bg-gradient-to-b from-[#0B1220] via-[#0D1A2B] to-[#0B1220] p-8 text-white">
+          {/* Signature: faint guilloché / security engraving */}
+          <div
+            className="absolute inset-0 pointer-events-none opacity-70"
+            style={{
+              backgroundImage:
+                'repeating-radial-gradient(circle at 20% 118%, rgba(16,185,129,0.12) 0px, rgba(16,185,129,0.12) 1px, transparent 1.5px, transparent 15px), repeating-radial-gradient(circle at 88% -12%, rgba(45,212,191,0.08) 0px, rgba(45,212,191,0.08) 1px, transparent 1.5px, transparent 21px)',
+            }}
+          />
+          {/* Soft emerald depth glow */}
+          <div className="absolute -bottom-24 -left-16 w-64 h-64 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
 
-          {/* Top Branding */}
+          {/* Brand lockup */}
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-amber-400 text-xs font-mono-ledger font-semibold shadow-xs mb-6">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Zero-Fiat Skill Network</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-white shadow-lg shadow-emerald-900/50">
+                <Repeat className="w-5 h-5" strokeWidth={2.4} />
+              </div>
+              <span className="text-[17px] font-display font-bold tracking-tight text-white">
+                Skill<span className="text-emerald-400">X</span>change
+              </span>
             </div>
+          </div>
 
-            <h2 className="text-2xl font-bold font-sans tracking-tight text-white leading-tight">
-              Learn anything for free by teaching what you know.
+          {/* Headline + subcopy */}
+          <div className="relative z-10 my-6">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/20 text-emerald-300 text-[10.5px] font-mono-ledger font-semibold mb-4">
+              <Sparkles className="w-3 h-3" />
+              <span>VERIFIED SKILL EXCHANGE</span>
+            </div>
+            <h2 className="text-[26px] leading-[1.15] font-display font-bold tracking-tight text-white">
+              Trade skills with people you can trust.
             </h2>
-
-            <p className="text-xs text-slate-300 mt-3 leading-relaxed">
-              Exchange skills directly 1-on-1 with interactive study rooms, real-time video, and cryptographically verified ledger certificates.
+            <p className="text-[13px] text-slate-400 mt-3 leading-relaxed max-w-xs">
+              Teach what you know, learn what you don&apos;t. Every completed exchange is logged to a
+              verifiable credential ledger.
             </p>
           </div>
 
-          {/* Feature Highlights Matching Home Screen Cards */}
-          <div className="relative z-10 space-y-2.5 my-6">
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/80">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+          {/* Trust points */}
+          <div className="relative z-10 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-emerald-300 shrink-0">
                 <Video className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white">Live Study Rooms</p>
-                <p className="text-[10px] text-slate-400 font-mono-ledger">WebRTC video, audio & whiteboard</p>
+                <p className="text-[13px] font-semibold text-white">Live 1-on-1 rooms</p>
+                <p className="text-[11px] text-slate-400">HD video, audio &amp; a shared whiteboard</p>
               </div>
             </div>
-
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/80">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-emerald-300 shrink-0">
                 <Coins className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white">Barter Credits Economy</p>
-                <p className="text-[10px] text-slate-400 font-mono-ledger">Earn every time you teach peers</p>
+                <p className="text-[13px] font-semibold text-white">Escrow-protected credits</p>
+                <p className="text-[11px] text-slate-400">Credits are held safely until a session ends</p>
               </div>
             </div>
-
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/80">
-              <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
-                <Shield className="w-4 h-4" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-emerald-300 shrink-0">
+                <BadgeCheck className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white">SHA-256 Ledger Proofs</p>
-                <p className="text-[10px] text-slate-400 font-mono-ledger">Verifiable certificates & quizzes</p>
+                <p className="text-[13px] font-semibold text-white">Verified certificates</p>
+                <p className="text-[11px] text-slate-400">Every skill you prove earns a lasting record</p>
               </div>
             </div>
           </div>
 
-          {/* Database Live Status Badge */}
-          <div className="relative z-10 pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] font-mono-ledger">
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isSupabaseConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-              <span className="text-slate-300 font-semibold">
-                {isSupabaseConfigured ? 'Supabase Database Active' : 'Offline In-Memory Engine'}
+          {/* Ledger status strip */}
+          <div className="relative z-10 mt-6 pt-4 border-t border-white/10 flex items-center justify-between font-mono-ledger text-[11px]">
+            <span className="flex items-center gap-2 text-slate-300">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isSupabaseConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                }`}
+              />
+              <span className="font-semibold">
+                {isSupabaseConfigured ? 'Ledger live · Supabase' : 'Offline in-memory engine'}
               </span>
-            </div>
-            <span className="text-slate-400">v2.4</span>
+            </span>
+            <span className="text-slate-500">TLS 256-bit</span>
           </div>
         </div>
 
-        {/* ── RIGHT AUTH FORM CONTAINER ────────────────────────────────────────────── */}
-        <div className="md:col-span-7 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto max-h-[92vh]">
+        {/* ── RIGHT AUTH FORM CONTAINER ───────────────────────────────────── */}
+        <div className="md:col-span-7 p-6 sm:p-9 flex flex-col justify-between overflow-y-auto max-h-[94vh]">
           <div>
-            {/* Top Tab Pill Switcher Matching HeaderNav */}
-            {tab !== 'forgot' && (
-              <div className="flex bg-slate-100 p-1 rounded-2xl mb-6 border border-slate-200/80 max-w-xs">
+            {/* Tab switcher */}
+            {tab !== 'forgot' && tab !== 'reset_password' && (
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-6 max-w-[300px]">
                 <button
                   type="button"
                   onClick={() => {
                     setTab('signin');
                     setErrorMsg(null);
                   }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-2 text-[13px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                     tab === 'signin'
-                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
-                      : 'text-slate-500 hover:text-slate-900'
+                      ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
+                      : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <LogIn className="w-3.5 h-3.5 text-amber-500" />
-                  Sign In
+                  <LogIn className="w-3.5 h-3.5" />
+                  Sign in
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setTab('signup');
                     setErrorMsg(null);
-                    setSignUpStep(1);
+                    setEmailAlreadyExists(false);
                   }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-2 text-[13px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                     tab === 'signup'
-                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
-                      : 'text-slate-500 hover:text-slate-900'
+                      ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
+                      : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <UserPlus className="w-3.5 h-3.5 text-emerald-600" />
-                  Create Account
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Create account
                 </button>
               </div>
             )}
 
             {/* Error Message */}
             {errorMsg && (
-              <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2.5">
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[13px] flex items-center gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                 <span className="font-medium">{errorMsg}</span>
               </div>
@@ -446,45 +448,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             {/* Celebration Card */}
             {successCelebration && (
-              <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center my-4">
-                <div className="w-12 h-12 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-500/20">
-                  <CheckCircle2 className="w-7 h-7" />
+              <div className="p-7 rounded-2xl bg-emerald-50 border border-emerald-200 text-center my-4">
+                <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-600/25">
+                  <CheckCircle2 className="w-8 h-8" />
                 </div>
-                <h4 className="text-base font-bold text-emerald-950">Welcome to SkillXchange!</h4>
-                <p className="text-xs text-emerald-700 mt-1">Synchronizing your barter wallet and dashboard...</p>
+                <h4 className="text-lg font-display font-bold text-emerald-950">You&apos;re in.</h4>
+                <p className="text-[13px] text-emerald-700 mt-1">Setting up your wallet and dashboard…</p>
               </div>
             )}
 
             {/* Email Verification Screen */}
             {emailVerificationSent && !successCelebration && (
-              <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 text-center my-2 space-y-4 animate-fade-in">
-                <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+              <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center my-2 space-y-4 animate-fade-scale">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center mx-auto">
                   <Mail className="w-8 h-8 animate-bounce" />
                 </div>
                 <div>
-                  <h4 className="text-lg font-bold text-slate-900">Check Your Email to Activate</h4>
-                  <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto leading-relaxed">
-                    We've sent an activation link to <strong className="text-slate-900 font-mono-ledger">{registeredEmail}</strong>. Please check your inbox and click the link to confirm your account.
+                  <h4 className="text-lg font-display font-bold text-slate-900">Confirm your email</h4>
+                  <p className="text-[13px] text-slate-600 mt-1 max-w-sm mx-auto leading-relaxed">
+                    We sent an activation link to{' '}
+                    <strong className="text-slate-900 font-mono-ledger">{registeredEmail}</strong>. Open it to
+                    finish setting up your account.
                   </p>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left flex items-start gap-2.5">
-                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="leading-relaxed text-[11.5px]">
-                    After confirming via the email link, sign in with your credentials to unlock live study rooms, bilateral peer matching, and start swapping skills!
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-left flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed text-[12px]">
+                    Once confirmed, sign in to unlock live rooms, peer matching, and your first skill swap.
                   </p>
                 </div>
-                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-2.5">
                   <button
                     type="button"
                     onClick={handleResendVerification}
                     disabled={resendingEmail || resendCooldown > 0}
-                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[13px] font-semibold transition-all cursor-pointer disabled:opacity-50"
                   >
                     {resendingEmail
-                      ? 'Sending...'
+                      ? 'Sending…'
                       : resendCooldown > 0
                       ? `Resend in ${resendCooldown}s`
-                      : 'Resend Verification Link'}
+                      : 'Resend link'}
                   </button>
                   <button
                     type="button"
@@ -493,545 +497,392 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setTab('signin');
                       setSignInEmail(registeredEmail);
                     }}
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer"
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold transition-all cursor-pointer"
                   >
-                    I Have Verified → Sign In
-                  </button>
-                </div>
-
-                {/* Instant Verification Bypass when Rate Limited */}
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setLoading(true);
-                      const result = await loginUser(registeredEmail || signUpEmail, signUpPassword || 'password123');
-                      setLoading(false);
-                      if (result.success) {
-                        setSuccessCelebration(true);
-                        setTimeout(() => {
-                          onClose();
-                        }, 800);
-                      } else {
-                        setEmailVerificationSent(false);
-                        setTab('signin');
-                        setSignInEmail(registeredEmail);
-                      }
-                    }}
-                    className="text-[11px] text-amber-600 hover:text-amber-700 font-semibold underline cursor-pointer"
-                  >
-                    Rate limited by email provider? Click here to Instant Verify & Enter
+                    I&apos;ve confirmed — sign in
                   </button>
                 </div>
               </div>
             )}
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* 1. SIGN IN TAB */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* ═══════════════════════ 1. SIGN IN ═══════════════════════ */}
             {!successCelebration && !emailVerificationSent && tab === 'signin' && (
               <div>
-                <div className="mb-5">
-                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">Sign In to Your Account</h3>
-                  <p className="text-xs text-slate-500 mt-1">Enter your verified email and password to access your dashboard.</p>
+                <div className="mb-6">
+                  <h3 className="text-[22px] font-display font-bold text-slate-900 tracking-tight">Welcome back</h3>
+                  <p className="text-[13px] text-slate-500 mt-1">Sign in to pick up where you left off.</p>
                 </div>
 
                 <form onSubmit={handleSignInSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1.5">
-                      Email Address or Username
-                    </label>
+                    <label className={labelClass}>Email or username</label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+                      <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type="text"
                         required
-                        placeholder="alex@skillexchange.org or @alexr"
+                        autoComplete="username"
+                        placeholder="you@example.com or @handle"
                         value={signInEmail}
                         onChange={e => setSignInEmail(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                        className={`${fieldClass} pl-10 pr-4`}
                       />
                     </div>
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-bold font-mono-ledger text-slate-700">
-                        Password
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700">Password</label>
                       <button
                         type="button"
                         onClick={() => setTab('forgot')}
-                        className="text-[11px] font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+                        className="text-[12px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
                       >
-                        Forgot Password?
+                        Forgot password?
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+                      <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
                         type={showSignInPass ? 'text' : 'password'}
                         required
+                        autoComplete="current-password"
                         placeholder="••••••••"
                         value={signInPassword}
                         onChange={e => setSignInPassword(e.target.value)}
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                        className={`${fieldClass} pl-10 pr-10`}
                       />
                       <button
                         type="button"
                         onClick={() => setShowSignInPass(!showSignInPass)}
-                        className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600"
+                        aria-label={showSignInPass ? 'Hide password' : 'Show password'}
+                        className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600"
                       >
                         {showSignInPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center justify-between pt-0.5">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={rememberMe}
                         onChange={e => setRememberMe(e.target.checked)}
-                        className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-3.5 h-3.5"
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
                       />
-                      <span className="text-xs text-slate-600 font-medium">Keep me signed in</span>
+                      <span className="text-[13px] text-slate-600">Keep me signed in</span>
                     </label>
-
                     <button
                       type="button"
                       onClick={() => {
                         setTab('signup');
                         setErrorMsg(null);
-                        setSignUpStep(1);
+                        setEmailAlreadyExists(false);
                       }}
-                      className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+                      className="text-[12px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
                     >
-                      New user? Register →
+                      New here? Create account
                     </button>
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all disabled:opacity-50 cursor-pointer"
+                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/20 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {loading ? (
                       <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                     ) : (
                       <>
-                        <span>Sign In</span>
+                        <span>Sign in</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
                   </button>
                 </form>
 
-                {/* ── 2 DEMO USERS FOR INSTANT TESTING ─────────────────── */}
-                <div className="mt-5 pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold font-mono-ledger text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-amber-500" />
-                      <span>1-Click Test Accounts</span>
-                    </span>
-                    <span className="text-[10px] text-emerald-600 font-semibold font-mono-ledger">
-                      Instant Testing
+                {/* Demo accounts */}
+                <div className="mt-6">
+                  <div className="relative flex items-center justify-center mb-3">
+                    <span className="absolute inset-x-0 h-px bg-slate-100" />
+                    <span className="relative bg-white px-3 text-[11px] font-medium text-slate-400">
+                      or explore a demo account
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {/* User 1: Aarav Sharma */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <button
                       type="button"
                       disabled={loading}
                       onClick={() => handleQuickDemoLogin(DEMO_USER_AARAV)}
-                      className="p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500/60 bg-slate-50/70 hover:bg-emerald-50/40 text-left transition-all group cursor-pointer flex items-center gap-2.5 active:scale-[0.98]"
+                      className="p-2.5 rounded-xl border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 text-left transition-all group cursor-pointer flex items-center gap-2.5 active:scale-[0.98]"
                     >
                       <img
                         src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
                         alt="Aarav"
-                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                        className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 truncate">
-                            Aarav (User A)
-                          </p>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-mono-ledger font-bold">
-                            Dev
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 truncate">Teaches: Python & AI</p>
+                        <p className="text-[13px] font-semibold text-slate-900 truncate">Aarav</p>
+                        <p className="text-[11px] text-slate-500 truncate">Teaches Python &amp; AI</p>
                       </div>
                     </button>
 
-                    {/* User 2: Priya Patel */}
                     <button
                       type="button"
                       disabled={loading}
                       onClick={() => handleQuickDemoLogin(DEMO_USER_PRIYA)}
-                      className="p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500/60 bg-slate-50/70 hover:bg-emerald-50/40 text-left transition-all group cursor-pointer flex items-center gap-2.5 active:scale-[0.98]"
+                      className="p-2.5 rounded-xl border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 text-left transition-all group cursor-pointer flex items-center gap-2.5 active:scale-[0.98]"
                     >
                       <img
                         src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80"
                         alt="Priya"
-                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                        className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 truncate">
-                            Priya (User B)
-                          </p>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-mono-ledger font-bold">
-                            Design
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 truncate">Teaches: UI/UX Design</p>
+                        <p className="text-[13px] font-semibold text-slate-900 truncate">Priya</p>
+                        <p className="text-[11px] text-slate-500 truncate">Teaches UI/UX design</p>
                       </div>
                     </button>
                   </div>
                 </div>
-
-                {/* Secure Authentication Badge */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono-ledger">
-                  <span className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Supabase Auth & Database Verified</span>
-                  </span>
-                  <span>SSL Encrypted</span>
-                </div>
               </div>
             )}
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* 2. SIGN UP TAB (2-Step Flow) */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* ═══════════════════════ 2. SIGN UP ═══════════════════════ */}
             {!successCelebration && !emailVerificationSent && tab === 'signup' && (
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">Create Free Account</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {signUpStep === 1 ? 'Step 1: Your Credentials & Identity' : 'Step 2: Skills Barter Match Profile'}
-                    </p>
-                  </div>
-                  {/* Step Progress Pills */}
-                  <div className="flex items-center gap-1.5">
-                    <span className={`h-2 rounded-full transition-all ${signUpStep === 1 ? 'bg-emerald-600 w-7' : 'bg-emerald-200 w-4'}`}></span>
-                    <span className={`h-2 rounded-full transition-all ${signUpStep === 2 ? 'bg-emerald-600 w-7' : 'bg-slate-200 w-4'}`}></span>
-                  </div>
+                <div className="mb-5">
+                  <h3 className="text-[22px] font-display font-bold text-slate-900 tracking-tight">
+                    Create your account
+                  </h3>
+                  <p className="text-[13px] text-slate-500 mt-1">Fill in your details to get started.</p>
                 </div>
 
-                {/* STEP 1: Basic Identity & Password */}
-                {signUpStep === 1 && (
-                  <form onSubmit={handleSignUpNext} className="space-y-3.5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1">
-                          Full Name *
-                        </label>
-                        <div className="relative">
-                          <User className="w-3.5 h-3.5 absolute left-3.5 top-3 text-slate-400" />
-                          <input
-                            type="text"
-                            required
-                            placeholder="Aarav Sharma"
-                            value={fullName}
-                            onChange={e => setFullName(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1">
-                          Handle
-                        </label>
-                        <div className="relative">
-                          <AtSign className="w-3.5 h-3.5 absolute left-3.5 top-3 text-slate-400" />
-                          <input
-                            type="text"
-                            placeholder="aarav_s"
-                            value={handle}
-                            onChange={e => setHandle(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
+                {/* Email already registered prompt */}
+                {emailAlreadyExists && (
+                  <div className="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[13px] flex items-start gap-2.5 animate-fade-scale">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
                     <div>
-                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1">
-                        Email Address *
-                      </label>
-                      <div className="relative">
-                        <Mail className="w-3.5 h-3.5 absolute left-3.5 top-3 text-slate-400" />
-                        <input
-                          type="email"
-                          required
-                          placeholder="aarav@college.edu or personal email"
-                          value={signUpEmail}
-                          onChange={e => setSignUpEmail(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1">
-                        Password *
-                      </label>
-                      <div className="relative">
-                        <Lock className="w-3.5 h-3.5 absolute left-3.5 top-3 text-slate-400" />
-                        <input
-                          type={showSignUpPass ? 'text' : 'password'}
-                          required
-                          placeholder="Min 6 characters"
-                          value={signUpPassword}
-                          onChange={e => setSignUpPassword(e.target.value)}
-                          className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                        />
+                      <p className="font-semibold">This email is already registered.</p>
+                      <p className="mt-0.5">
+                        Please{' '}
                         <button
                           type="button"
-                          onClick={() => setShowSignUpPass(!showSignUpPass)}
-                          className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600"
+                          onClick={() => {
+                            setTab('signin');
+                            setErrorMsg(null);
+                            setEmailAlreadyExists(false);
+                          }}
+                          className="underline font-semibold text-amber-800 hover:text-amber-900 cursor-pointer"
                         >
-                          {showSignUpPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-
-                      {/* Password Strength Indicator */}
-                      {signUpPassword && (
-                        <div className="mt-2">
-                          <div className="flex items-center justify-between text-[10px] font-mono-ledger mb-1">
-                            <span className="text-slate-500">Password Strength:</span>
-                            <span className="font-bold text-slate-700">{pwdStrength.label}</span>
-                          </div>
-                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${pwdStrength.color} transition-all duration-300`}
-                              style={{ width: `${pwdStrength.score}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      )}
+                          sign in instead
+                        </button>.
+                      </p>
                     </div>
-
-                    <div>
-                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1.5">
-                        Choose Profile Avatar
-                      </label>
-                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                        {PRESET_AVATARS.map((av, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => setSelectedAvatar(av)}
-                            className={`relative rounded-full overflow-hidden shrink-0 transition-transform ${
-                              selectedAvatar === av ? 'ring-2 ring-emerald-600 scale-105 shadow-sm' : 'opacity-70 hover:opacity-100'
-                            }`}
-                          >
-                            <img src={av} alt="Avatar option" className="w-9 h-9 object-cover" />
-                            {selectedAvatar === av && (
-                              <div className="absolute inset-0 bg-emerald-600/30 flex items-center justify-center text-white">
-                                <Check className="w-3.5 h-3.5" />
-                              </div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all cursor-pointer mt-2"
-                    >
-                      <span>Continue to Skill Setup</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </form>
+                  </div>
                 )}
 
-                {/* STEP 2: Skills Barter Configuration */}
-                {signUpStep === 2 && (
-                  <form onSubmit={handleSignUpSubmit} className="space-y-3.5">
+                <form onSubmit={handleSignUpSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1">
-                        Professional Headline / Bio
-                      </label>
+                      <label className={labelClass}>Full name</label>
                       <div className="relative">
-                        <Briefcase className="w-3.5 h-3.5 absolute left-3.5 top-3 text-slate-400" />
+                        <User className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                         <input
                           type="text"
-                          placeholder="e.g. CS Sophomore & Fullstack Developer"
-                          value={headline}
-                          onChange={e => setHeadline(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                          required
+                          autoComplete="name"
+                          placeholder="Aarav Sharma"
+                          value={fullName}
+                          onChange={e => setFullName(e.target.value)}
+                          className={`${fieldClass} pl-10 pr-3`}
                         />
                       </div>
                     </div>
-
-                    {/* Teach Skill */}
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold font-mono-ledger text-emerald-800">
-                          Skill You Can Teach (Offer)
-                        </label>
-                        <span className="text-[10px] text-emerald-600 font-mono-ledger font-bold">+1.0 Credit/hr</span>
+                      <label className={labelClass}>
+                        Handle <span className="font-normal text-slate-400">(optional)</span>
+                      </label>
+                      <div className="relative">
+                        <AtSign className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="aarav_s"
+                          value={handle}
+                          onChange={e => setHandle(e.target.value)}
+                          className={`${fieldClass} pl-10 pr-3`}
+                        />
                       </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Email</label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
-                        type="text"
-                        placeholder="e.g. Python, UI Design, Acoustic Guitar"
-                        value={teachSkill}
-                        onChange={e => setTeachSkill(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-emerald-50/50 border border-emerald-200 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
+                        type="email"
+                        required
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={signUpEmail}
+                        onChange={e => { setSignUpEmail(e.target.value); setEmailAlreadyExists(false); }}
+                        className={`${fieldClass} pl-10 pr-3`}
                       />
-                      {/* Popular suggestions matching website style */}
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {POPULAR_TEACH_SKILLS.map(s => (
-                          <button
-                            key={s.name}
-                            type="button"
-                            onClick={() => setTeachSkill(s.name)}
-                            className={`px-2.5 py-1 rounded-full text-[10.5px] font-semibold border transition-all ${
-                              teachSkill === s.name ? 'bg-emerald-600 text-white border-emerald-600' : s.color
-                            }`}
-                          >
-                            + {s.name}
-                          </button>
-                        ))}
-                      </div>
                     </div>
+                  </div>
 
-                    {/* Learn Skill */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold font-mono-ledger text-amber-800">
-                          Skill You Want to Learn (Goal)
-                        </label>
-                        <span className="text-[10px] text-amber-600 font-mono-ledger font-bold">Auto-Matched</span>
-                      </div>
+                  <div>
+                    <label className={labelClass}>Password</label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                       <input
-                        type="text"
-                        placeholder="e.g. Machine Learning, Japanese, Figma"
-                        value={learnSkill}
-                        onChange={e => setLearnSkill(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-amber-50/50 border border-amber-200 text-xs text-slate-900 focus:outline-none focus:border-amber-600"
+                        type={showSignUpPass ? 'text' : 'password'}
+                        required
+                        autoComplete="new-password"
+                        placeholder="At least 6 characters"
+                        value={signUpPassword}
+                        onChange={e => setSignUpPassword(e.target.value)}
+                        className={`${fieldClass} pl-10 pr-10`}
                       />
-                      {/* Popular suggestions matching website style */}
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {POPULAR_LEARN_SKILLS.map(s => (
-                          <button
-                            key={s.name}
-                            type="button"
-                            onClick={() => setLearnSkill(s.name)}
-                            className={`px-2.5 py-1 rounded-full text-[10.5px] font-semibold border transition-all ${
-                              learnSkill === s.name ? 'bg-amber-500 text-white border-amber-500' : s.color
-                            }`}
-                          >
-                            + {s.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Genesis Bonus Box */}
-                    <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <Shield className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-amber-950">Decentralized Genesis Profile</p>
-                        <p className="text-[10.5px] text-amber-800 font-mono-ledger">
-                          Includes verified SHA-256 Ledger ID block & zero-fiat barter wallet.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => setSignUpStep(1)}
-                        className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                        title="Back to Step 1"
+                        onClick={() => setShowSignUpPass(!showSignUpPass)}
+                        aria-label={showSignUpPass ? 'Hide password' : 'Show password'}
+                        className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600"
                       >
-                        <ArrowLeft className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all disabled:opacity-50 cursor-pointer"
-                      >
-                        {loading ? (
-                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                        ) : (
-                          <>
-                            <span>Complete Account & Claim 5 Credits</span>
-                            <CheckCircle2 className="w-4 h-4" />
-                          </>
-                        )}
+                        {showSignUpPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
-                  </form>
-                )}
+                    {signUpPassword && (
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="text-slate-500">Password strength</span>
+                          <span className="font-semibold text-slate-700">{pwdStrength.label}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${pwdStrength.color} transition-all duration-300`}
+                            style={{ width: `${(pwdStrength.score / 5) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Choose an avatar</label>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                      {PRESET_AVATARS.map((av, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedAvatar(av)}
+                          aria-label={`Avatar ${idx + 1}`}
+                          className={`relative rounded-full overflow-hidden shrink-0 transition-transform ${
+                            selectedAvatar === av
+                              ? 'ring-2 ring-emerald-600 ring-offset-2 scale-105'
+                              : 'opacity-60 hover:opacity-100'
+                          }`}
+                        >
+                          <img src={av} alt="" className="w-10 h-10 object-cover" />
+                          {selectedAvatar === av && (
+                            <div className="absolute inset-0 bg-emerald-600/30 flex items-center justify-center text-white">
+                              <Check className="w-3.5 h-3.5" />
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Welcome credits hint */}
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <Coins className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-semibold text-emerald-950">You&apos;ll start with 5 credits</p>
+                      <p className="text-[11.5px] text-emerald-800">Enough to book your first skill swap.</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/20 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {loading ? (
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <span>Create account</span>
+                        <CheckCircle2 className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
               </div>
             )}
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* 3. FORGOT PASSWORD TAB */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* ═══════════════════════ 3. FORGOT PASSWORD ═══════════════════════ */}
             {!successCelebration && tab === 'forgot' && (
               <div>
                 <button
                   type="button"
                   onClick={() => setTab('signin')}
-                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold mb-4 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-slate-800 font-medium mb-5 cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Sign In</span>
+                  <span>Back to sign in</span>
                 </button>
 
-                <div className="mb-5">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mb-3">
+                <div className="mb-6">
+                  <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mb-3">
                     <KeyRound className="w-5 h-5" />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">Reset Your Password</h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Enter your registered email address. Supabase Auth will securely send a password reset link to your inbox.
+                  <h3 className="text-[22px] font-display font-bold text-slate-900 tracking-tight">
+                    Reset your password
+                  </h3>
+                  <p className="text-[13px] text-slate-500 mt-1">
+                    Enter your email and we&apos;ll send you a secure reset link.
                   </p>
                 </div>
 
                 {recoverySent ? (
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-3">
-                    <p className="font-bold flex items-center gap-1.5 text-sm text-emerald-950">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Password Reset Email Dispatched!
+                  <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-3">
+                    <p className="font-display font-bold flex items-center gap-2 text-[15px] text-emerald-950">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Check your inbox
                     </p>
-                    <p className="text-emerald-700 leading-relaxed">
-                      A secure recovery link has been sent to <strong className="font-mono-ledger">{recoveryEmail}</strong>. Check your inbox (or spam) and click the link to choose a new password.
+                    <p className="text-[13px] text-emerald-700 leading-relaxed">
+                      A reset link is on its way to{' '}
+                      <strong className="font-mono-ledger">{recoveryEmail}</strong>. Check spam if you don&apos;t
+                      see it in a minute.
                     </p>
                     <button
                       type="button"
                       onClick={() => setTab('signin')}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-colors cursor-pointer"
+                      className="w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors cursor-pointer"
                     >
-                      Return to Sign In
+                      Back to sign in
                     </button>
                   </div>
                 ) : (
                   <form onSubmit={handleRecoverySubmit} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1.5">
-                        Registered Email
-                      </label>
+                      <label className={labelClass}>Registered email</label>
                       <div className="relative">
-                        <Mail className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+                        <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                         <input
                           type="email"
                           required
-                          placeholder="alex@skillexchange.org"
+                          autoComplete="email"
+                          placeholder="you@example.com"
                           value={recoveryEmail}
                           onChange={e => setRecoveryEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                          className={`${fieldClass} pl-10 pr-4`}
                         />
                       </div>
                     </div>
@@ -1039,13 +890,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                      className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
                     >
                       {loading ? (
                         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                       ) : (
                         <>
-                          <span>Send Password Reset Email</span>
+                          <span>Send reset link</span>
                           <ArrowRight className="w-4 h-4" />
                         </>
                       )}
@@ -1055,56 +906,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             )}
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* 4. CREATE NEW PASSWORD TAB (From Reset Link) */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* ═══════════════════════ 4. CREATE NEW PASSWORD ═══════════════════════ */}
             {!successCelebration && tab === 'reset_password' && (
               <div>
-                <div className="mb-5">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mb-3">
+                <div className="mb-6">
+                  <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mb-3">
                     <Lock className="w-5 h-5" />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">Create New Password</h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Your reset token is verified. Enter a strong new password for your SkillXchange account.
+                  <h3 className="text-[22px] font-display font-bold text-slate-900 tracking-tight">
+                    Choose a new password
+                  </h3>
+                  <p className="text-[13px] text-slate-500 mt-1">
+                    Your reset link is verified. Set a new password for your account.
                   </p>
                 </div>
 
                 {resetSuccess ? (
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-3 text-center">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto">
-                      <CheckCircle2 className="w-6 h-6" />
+                  <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-3 text-center">
+                    <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto">
+                      <CheckCircle2 className="w-7 h-7" />
                     </div>
-                    <h4 className="font-bold text-sm text-emerald-950">Password Updated Successfully!</h4>
-                    <p className="text-emerald-700">You can now sign in with your new credentials.</p>
+                    <h4 className="font-display font-bold text-[15px] text-emerald-950">Password updated</h4>
+                    <p className="text-[13px] text-emerald-700">You can now sign in with your new password.</p>
                     <button
                       type="button"
                       onClick={() => setTab('signin')}
-                      className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+                      className="w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors cursor-pointer"
                     >
-                      Sign In to Account
+                      Sign in
                     </button>
                   </div>
                 ) : (
                   <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1.5">
-                        New Password
-                      </label>
+                      <label className={labelClass}>New password</label>
                       <div className="relative">
-                        <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+                        <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                         <input
                           type={showNewPass ? 'text' : 'password'}
                           required
+                          autoComplete="new-password"
                           placeholder="At least 6 characters"
                           value={newPassword}
                           onChange={e => setNewPassword(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                          className={`${fieldClass} pl-10 pr-10`}
                         />
                         <button
                           type="button"
                           onClick={() => setShowNewPass(!showNewPass)}
-                          className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          aria-label={showNewPass ? 'Hide password' : 'Show password'}
+                          className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                         >
                           {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -1112,18 +963,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold font-mono-ledger text-slate-700 mb-1.5">
-                        Confirm New Password
-                      </label>
+                      <label className={labelClass}>Confirm new password</label>
                       <div className="relative">
-                        <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+                        <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                         <input
                           type={showNewPass ? 'text' : 'password'}
                           required
+                          autoComplete="new-password"
                           placeholder="Re-enter new password"
                           value={confirmPassword}
                           onChange={e => setConfirmPassword(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                          className={`${fieldClass} pl-10 pr-4`}
                         />
                       </div>
                     </div>
@@ -1131,13 +981,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                      className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
                     >
                       {loading ? (
                         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                       ) : (
                         <>
-                          <span>Update Password & Continue</span>
+                          <span>Update password</span>
                           <CheckCircle2 className="w-4 h-4" />
                         </>
                       )}
@@ -1148,13 +998,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
           </div>
 
-          {/* Bottom Security Footer */}
-          <div className="pt-4 mt-6 border-t border-slate-100 flex items-center justify-between text-[10.5px] text-slate-400 font-mono-ledger">
-            <div className="flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Cryptographic Peer Verification</span>
-            </div>
-            <span>SkillXchange v2.4</span>
+          {/* Security Footer */}
+          <div className="pt-4 mt-6 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-mono-ledger">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Encrypted · Supabase Auth</span>
+            </span>
+            <span>Identity-verified peers</span>
           </div>
         </div>
       </div>

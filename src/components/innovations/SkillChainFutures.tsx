@@ -274,72 +274,74 @@ export const SkillChainFutures: React.FC = () => {
 
       {/* Modal: New Future Commitment */}
       {showNewCommitmentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#16261F]/80 backdrop-blur-md">
-          <div className="ledger-paper rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#D9D0B8] pb-3">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-[#16261F]/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowNewCommitmentModal(false)}>
+          <div className="ledger-paper rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D0B8] shrink-0 bg-[#FDFBF7]">
               <h3 className="font-display font-bold text-lg text-[#1A2620] flex items-center gap-2">
                 <Hourglass className="w-5 h-5 text-[#E7A33E]" /> Post Forward Skill Commitment
               </h3>
               <button
                 onClick={() => setShowNewCommitmentModal(false)}
-                className="text-[#53635A] hover:text-[#1A2620] text-xs font-bold"
+                className="p-1 rounded-lg text-[#53635A] hover:text-[#1A2620] text-xs font-bold"
               >
-                ✕ Close
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmitCommitment} className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="text-[#1A2620] font-bold">Skill You Are Currently Learning:</label>
-                <input
-                  type="text"
-                  value={skillLearning}
-                  onChange={e => setSkillLearning(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#FDFBF7] border border-[#D9D0B8] text-[#1A2620] focus:outline-none focus:border-[#E7A33E]"
-                  required
-                />
+            <form onSubmit={handleSubmitCommitment} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                <div className="space-y-1.5">
+                  <label className="text-[#1A2620] font-bold">Skill You Are Currently Learning:</label>
+                  <input
+                    type="text"
+                    value={skillLearning}
+                    onChange={e => setSkillLearning(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-[#FDFBF7] border border-[#D9D0B8] text-[#1A2620] focus:outline-none focus:border-[#E7A33E]"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[#1A2620] font-bold">Skill You Commit to Teach Upon Completion:</label>
+                  <input
+                    type="text"
+                    value={skillToTeach}
+                    onChange={e => setSkillToTeach(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-[#FDFBF7] border border-[#D9D0B8] text-[#1A2620] focus:outline-none focus:border-[#E7A33E]"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[#1A2620] font-bold">Maturity Horizon (Days):</label>
+                  <select
+                    value={maturityDays}
+                    onChange={e => setMaturityDays(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl bg-[#FDFBF7] border border-[#D9D0B8] text-[#1A2620] focus:outline-none focus:border-[#E7A33E]"
+                  >
+                    <option value={30}>30 Days (~1 Month)</option>
+                    <option value={45}>45 Days (~1.5 Months)</option>
+                    <option value={60}>60 Days (~2 Months)</option>
+                    <option value={90}>90 Days (~3 Months)</option>
+                  </select>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#FDFBF7] border border-[#D9D0B8] text-[#53635A] text-[11px] font-mono-ledger">
+                  [NOTE] The graph optimizer holds this pending node to automatically complete multi-party loops as maturity approaches.
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[#1A2620] font-bold">Skill You Commit to Teach Upon Completion:</label>
-                <input
-                  type="text"
-                  value={skillToTeach}
-                  onChange={e => setSkillToTeach(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#FDFBF7] border border-[#D9D0B8] text-[#1A2620] focus:outline-none focus:border-[#E7A33E]"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[#1A2620] font-bold">Maturity Horizon (Days):</label>
-                <select
-                  value={maturityDays}
-                  onChange={e => setMaturityDays(Number(e.target.value))}
-                  className="w-full p-2.5 rounded-xl bg-[#FDFBF7] border border-[#D9D0B8] text-[#1A2620] focus:outline-none focus:border-[#E7A33E]"
-                >
-                  <option value={30}>30 Days (~1 Month)</option>
-                  <option value={45}>45 Days (~1.5 Months)</option>
-                  <option value={60}>60 Days (~2 Months)</option>
-                  <option value={90}>90 Days (~3 Months)</option>
-                </select>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#FDFBF7] border border-[#D9D0B8] text-[#53635A] text-[11px] font-mono-ledger">
-                [NOTE] The graph optimizer holds this pending node to automatically complete multi-party loops as maturity approaches.
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[#D9D0B8] bg-[#F4EFE6] shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowNewCommitmentModal(false)}
-                  className="px-4 py-2 rounded-xl bg-[#16261F]/10 text-[#1A2620] font-semibold hover:bg-[#16261F]/20"
+                  className="px-4 py-2.5 rounded-xl bg-[#16261F]/10 text-[#1A2620] font-semibold hover:bg-[#16261F]/20 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#E7A33E] hover:bg-[#D49029] text-[#16261F] font-bold shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-[#E7A33E] hover:bg-[#D49029] text-[#16261F] font-bold shadow-sm cursor-pointer"
                 >
                   Lock Forward Commitment
                 </button>

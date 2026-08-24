@@ -38,6 +38,8 @@ import {
   fetchChatMessagesFromDB,
   saveChatMessageToDB,
   updateProfileInDB,
+  updateTeachingSkillInDB,
+  updateLearningGoalInDB,
   addTeachingSkillToDB,
   removeTeachingSkillFromDB,
   addLearningGoalToDB,
@@ -47,11 +49,25 @@ import {
   recordCreditTransactionInDB,
   updateUserCreditBalanceInDB,
   deleteNotebookEntryFromDB,
+  computeSha256,
+  transferCreditsAtomicInDB,
+  releaseEscrowAtomicInDB,
 } from '../lib/supabase/services';
+import {
+  SEED_SKILL_CHAINS,
+  SEED_FUTURE_COMMITMENTS,
+  SEED_TRANSCRIPT_PROOFS,
+  DYNAMIC_RATES,
+  SEED_BOUNTIES,
+  SEED_PREDICTIVE_MATCHES,
+  SEED_NOTEBOOK_ENTRIES,
+  SEED_CREDENTIAL_LEDGER,
+} from '../data/seedData';
 import {
   signUpUser,
   signInUser,
   signOutUser,
+  updateUserEmail,
   onAuthStateChanged,
   fetchUserProfile,
   resendVerificationEmail,
@@ -78,6 +94,7 @@ export type NavigationTab =
   | 'profile'
   | 'live_graph'
   | 'skill-graph'
+  | 'graph'
   | 'transcript_proof'
   | 'dynamic_economy'
   | 'dynamic-economy'
@@ -96,6 +113,7 @@ export type NavigationTab =
   | 'credential-ledger'
   | 'soft_skills'
   | 'soft_skills_lab'
+  | 'soft-skills'
   | 'soft-skills-lab'
   | 'verification_center'
   | 'verification-center'
@@ -104,7 +122,10 @@ export type NavigationTab =
   | 'college-hub'
   | 'admin_dashboard'
   | 'admin-panel'
-  | 'progress';
+  | 'progress'
+  | 'vault'
+  | 'hub'
+  | 'notebook';
 
 export interface LedgerTransaction {
   id: string;
@@ -130,12 +151,16 @@ export interface AppContextType {
   allUsers: UserProfile[];
   switchUser: (userId: string) => void;
   updateCurrentUserProfile: (bio: string, headline: string) => void;
+  updateCurrentUserFullProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
+  requestEmailChange: (newEmail: string) => Promise<{ needsVerification: boolean; error: string | null }>;
 
   // Skills Catalog
   skills: Skill[];
   addSkillToTeach: (skillName: string, category: string, level: string, years: number) => void;
+  editSkillToTeach: (skillId: string, updates: Partial<UserSkillOffering>) => void;
   removeSkillToTeach: (skillId: string) => void;
   addSkillToLearn: (skillName: string, targetLevel: string, urgency: string) => void;
+  editSkillToLearn: (skillId: string, updates: Partial<UserLearningGoal>) => void;
   removeSkillToLearn: (skillId: string) => void;
   updateLearningGoalProgress: (skillId: string, progressPercent: number) => void;
 
@@ -171,13 +196,11 @@ export interface AppContextType {
   postBounty: (title: string, skillName: string, category: string, description: string, budgetCredits: number, budgetInr: number, deadlineWeeks: number) => void;
   submitBountyBid: (bountyId: string, proposedCurriculum: string, estimatedSessions: number, bidPriceCredits: number) => void;
 
-  // Fusion Sessions (60.6)
+  // Innovations
   fusionOptions: FusionSessionOption[];
+  predictiveMatches: PredictiveMatch[];
   requestFusionSession: (fusionId: string) => void;
   createFusionSession: (fusion: Omit<FusionSessionOption, 'id'>) => void;
-
-  // Predictive Matches (60.7)
-  predictiveMatches: PredictiveMatch[];
 
   // Second Brain Notebook (60.8)
   notebookEntries: NotebookEntry[];
@@ -227,6 +250,7 @@ export interface AppContextType {
   openChatWithPeer: (peer: ChatPeerInfo) => void;
   closeChat: () => void;
   sendPeerMessage: (peerId: string, text: string) => void;
+  sendPeerTyping: (peerId: string, isTyping: boolean) => void;
   clearPeerChat: (peerId: string) => void;
 
   // Supabase Auth & Session System
@@ -242,6 +266,158 @@ export interface AppContextType {
   resendVerification: (email: string) => Promise<boolean>;
   logoutUser: () => Promise<void>;
 }
+
+// ── Default Mock User ────────────────────────────────────────────────────────
+export const DEFAULT_USER: UserProfile = {
+  id: 'guest',
+  name: 'Jatin',
+  handle: '@jatin_dev',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=500&auto=format&fit=crop&q=80',
+  headline: 'Full-stack developer and UI/UX enthusiast. Let\'s learn and grow together!',
+  bio: 'Passionate developer who loves teaching and learning new things.\nAlways up for a good knowledge exchange! 🚀',
+  location: 'Chandigarh, India',
+  timezone: 'IST (UTC+5:30)',
+  college: 'Punjab Engineering College',
+  collegeVerified: true,
+  languages: ['English', 'Hindi', 'Punjabi'],
+  skillsToTeach: [
+    {
+      skillId: 'teach-1',
+      skillName: 'Python',
+      category: 'Programming',
+      level: 'Advanced',
+      yearsExperience: 3,
+      verified: true,
+      verificationBadge: 'Verified Mentor',
+      hourlyRateInr: 600,
+      hourlyRateCredits: 1.4,
+      proofCount: 18,
+    },
+    {
+      skillId: 'teach-2',
+      skillName: 'UI/UX Design',
+      category: 'Design & Creative',
+      level: 'Intermediate',
+      yearsExperience: 2,
+      verified: true,
+      verificationBadge: 'Verified Peer',
+      hourlyRateInr: 500,
+      hourlyRateCredits: 1.2,
+      proofCount: 12,
+    },
+    {
+      skillId: 'teach-3',
+      skillName: 'Git & GitHub',
+      category: 'Programming',
+      level: 'Intermediate',
+      yearsExperience: 2,
+      verified: true,
+      verificationBadge: 'Verified Peer',
+      hourlyRateInr: 450,
+      hourlyRateCredits: 1.1,
+      proofCount: 9,
+    },
+    {
+      skillId: 'teach-4',
+      skillName: 'Web Development',
+      category: 'Programming',
+      level: 'Intermediate',
+      yearsExperience: 3,
+      verified: true,
+      verificationBadge: 'Verified Peer',
+      hourlyRateInr: 550,
+      hourlyRateCredits: 1.3,
+      proofCount: 15,
+    },
+  ],
+  skillsToLearn: [
+    {
+      skillId: 'learn-1',
+      skillName: 'Machine Learning',
+      targetLevel: 'Beginner',
+      urgency: 'career_switch',
+      targetDateWeeks: 6,
+      currentRoadmapStep: 2,
+      totalRoadmapSteps: 5,
+      progressPercent: 40,
+    },
+    {
+      skillId: 'learn-2',
+      skillName: 'Data Structures',
+      targetLevel: 'Intermediate',
+      urgency: 'urgent',
+      targetDateWeeks: 8,
+      currentRoadmapStep: 3,
+      totalRoadmapSteps: 6,
+      progressPercent: 50,
+    },
+    {
+      skillId: 'learn-3',
+      skillName: 'React Native',
+      targetLevel: 'Intermediate',
+      urgency: 'flexible',
+      targetDateWeeks: 10,
+      currentRoadmapStep: 2,
+      totalRoadmapSteps: 5,
+      progressPercent: 35,
+    },
+    {
+      skillId: 'learn-4',
+      skillName: 'Advanced SQL',
+      targetLevel: 'Beginner',
+      urgency: 'flexible',
+      targetDateWeeks: 4,
+      currentRoadmapStep: 1,
+      totalRoadmapSteps: 4,
+      progressPercent: 20,
+    },
+  ],
+  creditsBalance: 128,
+  totalCreditsEarned: 185,
+  totalCreditsSpent: 57,
+  teachingHours: 36,
+  learningHours: 28,
+  trustScore: {
+    identityVerified: true,
+    skillVerifiedCount: 4,
+    completedSessions: 43,
+    attendanceRate: 99,
+    averageRating: 4.95,
+    cancellationRate: 1,
+    responseRate: 98,
+    accountAgeMonths: 8,
+    overallScore: 97,
+  },
+  streakDays: 30,
+  xpPoints: 3450,
+  badges: [
+    {
+      id: 'b-1',
+      title: 'Top Peer Mentor',
+      description: 'Completed 15+ 5-star teaching sessions',
+      icon: '🏆',
+      category: 'teaching',
+      unlockedAt: '2026-07-15',
+    },
+    {
+      id: 'b-2',
+      title: 'Chain Pioneer',
+      description: 'Successfully initiated a 3-way barter loop',
+      icon: '⛓️',
+      category: 'chain',
+      unlockedAt: '2026-08-01',
+    },
+    {
+      id: 'b-3',
+      title: 'Ledger Attested',
+      description: '5+ SHA-256 micro-quiz blocks minted',
+      icon: '📜',
+      category: 'verification',
+      unlockedAt: '2026-08-10',
+    },
+  ],
+  role: 'user',
+};
 
 export const DEMO_USER_AARAV: UserProfile = {
   id: 'user-demo-aarav',
@@ -582,7 +758,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               totalCreditsEarned: earned || prev.totalCreditsEarned,
               totalCreditsSpent: spent || prev.totalCreditsSpent,
             }));
-          } catch {}
+          } catch { }
         } else {
           const initialTx = [
             {
@@ -603,7 +779,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (savedNotifs) {
         try {
           setNotifications(JSON.parse(savedNotifs));
-        } catch {}
+        } catch { }
       } else {
         setNotifications([
           {
@@ -616,7 +792,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
         ]);
       }
-    } catch {}
+    } catch { }
   };
 
   // Restore session on mount & listen to Supabase Auth state changes
@@ -632,7 +808,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsAuthenticated(true);
           try {
             localStorage.setItem('skillxchange_active_user', JSON.stringify(profile));
-          } catch {}
+          } catch { }
           hydrateAllData(profile);
         }
       }
@@ -656,14 +832,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           try {
             localStorage.setItem('skillxchange_active_user', JSON.stringify(profile));
-          } catch {}
+          } catch { }
           hydrateAllData(profile);
         }
       } else {
         // Clear stale local data on logout / invalid session
         try {
           localStorage.removeItem('skillxchange_active_user');
-        } catch {}
+        } catch { }
         setIsAuthenticated(false);
         setCurrentUser(BLANK_GUEST_USER);
         setAuthModalOpen(false);
@@ -699,7 +875,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAuthenticated(true);
         try {
           localStorage.setItem('skillxchange_active_user', JSON.stringify(user));
-        } catch {}
+        } catch { }
         hydrateAllData(user);
         showToast(`Welcome back, ${user.name}!`, 'success');
         return { success: true, error: null };
@@ -712,7 +888,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsAuthenticated(true);
           try {
             localStorage.setItem('skillxchange_active_user', JSON.stringify(profile));
-          } catch {}
+          } catch { }
           hydrateAllData(profile);
           showToast(`Welcome back, ${profile.name}!`, 'success');
           return { success: true, error: null };
@@ -735,7 +911,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsAuthenticated(true);
     try {
       localStorage.setItem('skillxchange_active_user', JSON.stringify(demoUser));
-    } catch {}
+    } catch { }
     hydrateAllData(demoUser);
     setAllUsers(prev => {
       const exists = prev.some(u => u.id === demoUser.id);
@@ -761,13 +937,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           showToast(warning, 'warning');
         }
         setAllUsers(prev => [user, ...prev.filter(u => u.id !== user.id)]);
-        
+
         if (!needsEmailVerification) {
           setCurrentUser(user);
           setIsAuthenticated(true);
           try {
             localStorage.setItem('skillxchange_active_user', JSON.stringify(user));
-          } catch {}
+          } catch { }
           hydrateAllData(user);
         }
 
@@ -848,23 +1024,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotebookEntries([]);
     try {
       localStorage.removeItem('skillxchange_active_user');
-    } catch {}
+    } catch { }
     showToast('Signed out successfully.', 'info');
     setIsAuthLoading(false);
   };
 
   // Innovation States
-  const [skillChains, setSkillChains] = useState<SkillChain[]>([]);
-  const [futureCommitments, setFutureCommitments] = useState<FutureCommitment[]>([]);
-  const [transcriptProofs, setTranscriptProofs] = useState<SessionTranscriptProof[]>([]);
+  const [skillChains, setSkillChains] = useState<SkillChain[]>(SEED_SKILL_CHAINS);
+  const [futureCommitments, setFutureCommitments] = useState<FutureCommitment[]>(SEED_FUTURE_COMMITMENTS);
+  const [transcriptProofs, setTranscriptProofs] = useState<SessionTranscriptProof[]>(SEED_TRANSCRIPT_PROOFS);
   const [activeQuizProof, setActiveQuizProof] = useState<SessionTranscriptProof | null>(null);
-  const [dynamicRates, setDynamicRates] = useState<DynamicSkillRate[]>([]);
-  const [bounties, setBounties] = useState<SkillBounty[]>([]);
+  const [dynamicRates, setDynamicRates] = useState<DynamicSkillRate[]>(DYNAMIC_RATES);
+  const [bounties, setBounties] = useState<SkillBounty[]>(SEED_BOUNTIES);
   const [fusionOptions, setFusionOptions] = useState<FusionSessionOption[]>(SEED_FUSION_OPTIONS);
-  const [predictiveMatches] = useState<PredictiveMatch[]>([]);
-  const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
+  const [predictiveMatches] = useState<PredictiveMatch[]>(SEED_PREDICTIVE_MATCHES);
+  const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>(SEED_NOTEBOOK_ENTRIES);
   const [searchQueryNotebook, setSearchQueryNotebook] = useState<string>('');
-  const [credentialLedger, setCredentialLedger] = useState<CredentialBlock[]>([]);
+  const [credentialLedger, setCredentialLedger] = useState<CredentialBlock[]>(SEED_CREDENTIAL_LEDGER);
 
   // Dynamic Transaction Ledger (Starts clean for new users or loads from DB)
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
@@ -945,9 +1121,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Realtime Incoming Call Invite State
   const [incomingCallInvite, setIncomingCallInvite] = useState<IncomingCallInvite | null>(null);
   const globalRealtimeChannelRef = useRef<any>(null);
+  const localBroadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
-  // ── Global Supabase Realtime Channel (Live Chat & Study Room Invites) ────────
+  // ── Global Supabase Realtime Channel & Multi-Tab Sync (Live Chat & Invites) ──
   useEffect(() => {
+    // 1. Setup Local Browser Multi-Tab Sync
+    let localBc: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        localBc = new BroadcastChannel('skillxchange_local_realtime');
+        localBc.onmessage = (event) => {
+          const { type, payload } = event.data || {};
+          if (type === 'peer_chat_message' && payload && payload.receiverId === currentUser.id) {
+            const incomingMsg: PeerChatMessage = {
+              id: payload.id || `msg-${Date.now()}`,
+              senderId: payload.senderId,
+              senderName: payload.senderName,
+              senderAvatar: payload.senderAvatar,
+              text: payload.text,
+              timestamp: payload.timestamp || 'Just now',
+              isMe: false,
+              status: 'delivered',
+              type: payload.type,
+              proposalData: payload.proposalData,
+            };
+
+            setPeerConversations(prev => {
+              const list = prev[payload.senderId] || [];
+              if (list.some(m => m.id === incomingMsg.id)) return prev;
+              return {
+                ...prev,
+                [payload.senderId]: [...list, incomingMsg],
+              };
+            });
+
+            if (!activeChatPeer || activeChatPeer.id !== payload.senderId) {
+              addNotification(`New message from ${payload.senderName}`, payload.text, 'match');
+              showToast(`New message from ${payload.senderName}`, 'info');
+            }
+          } else if (type === 'peer_typing' && payload && payload.receiverId === currentUser.id) {
+            setIsPeerTyping(prev => ({
+              ...prev,
+              [payload.senderId]: Boolean(payload.isTyping),
+            }));
+          } else if (type === 'room_invite' && payload && payload.toUserId === currentUser.id) {
+            setIncomingCallInvite(payload);
+            addNotification(`Incoming Study Room Call`, `${payload.fromUserName} invited you to: ${payload.title}`, 'match');
+            showToast(`📞 Incoming Study Room call from ${payload.fromUserName}!`, 'success');
+          }
+        };
+        localBroadcastChannelRef.current = localBc;
+      } catch (err) {
+        console.warn('BroadcastChannel error:', err);
+      }
+    }
+
+    // 2. Setup Supabase Realtime WebSocket Connection
     if (!isSupabaseConfigured || !supabase) return;
 
     const channel = supabase.channel('skillxchange_global_network', {
@@ -955,6 +1184,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     channel
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        (payload: any) => {
+          const newRow = payload?.new;
+          if (newRow && (newRow.receiver_id === currentUser.id || newRow.sender_id === currentUser.id)) {
+            const isMe = newRow.sender_id === currentUser.id;
+            const peerId = isMe ? newRow.receiver_id : newRow.sender_id;
+            const incomingMsg: PeerChatMessage = {
+              id: newRow.id,
+              senderId: newRow.sender_id,
+              senderName: newRow.sender_name,
+              senderAvatar: newRow.sender_avatar,
+              text: newRow.text,
+              timestamp: newRow.timestamp || 'Just now',
+              isMe,
+              status: newRow.is_read ? 'read' : 'delivered',
+            };
+
+            setPeerConversations(prev => {
+              const currentList = prev[peerId] || [];
+              if (currentList.some(m => m.id === incomingMsg.id)) return prev;
+              return {
+                ...prev,
+                [peerId]: [...currentList, incomingMsg],
+              };
+            });
+
+            if (!isMe && (!activeChatPeer || activeChatPeer.id !== newRow.sender_id)) {
+              addNotification(`New message from ${newRow.sender_name}`, newRow.text, 'match');
+              showToast(`New message from ${newRow.sender_name}`, 'info');
+            }
+          }
+        }
+      )
       .on('broadcast', { event: 'peer_chat_message' }, ({ payload }) => {
         if (payload && payload.receiverId === currentUser.id) {
           const newMsg: PeerChatMessage = {
@@ -963,22 +1227,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             senderName: payload.senderName,
             senderAvatar: payload.senderAvatar,
             text: payload.text,
-            timestamp: payload.timestamp,
+            timestamp: payload.timestamp || 'Just now',
             isMe: false,
             status: 'read',
             type: payload.type,
             proposalData: payload.proposalData,
           };
 
-          setPeerConversations(prev => ({
-            ...prev,
-            [payload.senderId]: [...(prev[payload.senderId] || []), newMsg],
-          }));
+          setPeerConversations(prev => {
+            const list = prev[payload.senderId] || [];
+            if (list.some(m => m.id === newMsg.id)) return prev;
+            return {
+              ...prev,
+              [payload.senderId]: [...list, newMsg],
+            };
+          });
 
           if (!activeChatPeer || activeChatPeer.id !== payload.senderId) {
             addNotification(`New message from ${payload.senderName}`, payload.text, 'match');
             showToast(`New message from ${payload.senderName}`, 'info');
           }
+        }
+      })
+      .on('broadcast', { event: 'peer_typing' }, ({ payload }) => {
+        if (payload && payload.receiverId === currentUser.id) {
+          setIsPeerTyping(prev => ({
+            ...prev,
+            [payload.senderId]: Boolean(payload.isTyping),
+          }));
         }
       })
       .on('broadcast', { event: 'room_invite' }, ({ payload }) => {
@@ -994,6 +1270,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       supabase?.removeChannel(channel);
+      if (localBc) {
+        localBc.close();
+        localBroadcastChannelRef.current = null;
+      }
     };
   }, [currentUser.id, activeChatPeer]);
 
@@ -1014,7 +1294,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (dbProfiles && dbProfiles.length > 0) {
           setAllUsers(dbProfiles);
-          setCurrentUser(dbProfiles[0]);
+          // Preserve current authenticated identity instead of clobbering with dbProfiles[0]
+          if (currentUser.id && currentUser.id !== 'guest') {
+            const myProfile = dbProfiles.find(p => p.id === currentUser.id);
+            if (myProfile) {
+              setCurrentUser(myProfile);
+            }
+          }
         }
         if (dbSkills && dbSkills.length > 0) setSkills(dbSkills);
         if (dbBounties && dbBounties.length > 0) setBounties(dbBounties);
@@ -1062,12 +1348,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveChatPeer(null);
   };
 
+  const sendPeerTyping = (peerId: string, isTyping: boolean) => {
+    if (!peerId) return;
+    // Broadcast over Supabase Realtime channel
+    try {
+      globalRealtimeChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'peer_typing',
+        payload: { senderId: currentUser.id, receiverId: peerId, isTyping },
+      });
+    } catch { }
+
+    // Broadcast over Local Browser Tab Sync
+    try {
+      localBroadcastChannelRef.current?.postMessage({
+        type: 'peer_typing',
+        payload: { senderId: currentUser.id, receiverId: peerId, isTyping },
+      });
+    } catch { }
+  };
+
   const sendPeerMessage = (peerId: string, text: string) => {
     if (!text.trim()) return;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const userMsg: PeerChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       senderId: currentUser.id,
       senderName: currentUser.name,
       senderAvatar: currentUser.avatar,
@@ -1077,21 +1383,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'sent',
     };
 
-    // Optimistically append local message
+    // 1. Optimistically append local message
     setPeerConversations(prev => ({
       ...prev,
       [peerId]: [...(prev[peerId] || []), userMsg],
     }));
 
-    // Persist real message to Supabase DB
+    // 2. Persist real message to Supabase DB
     saveChatMessageToDB(currentUser.id, peerId, userMsg);
 
-    // Live broadcast to peer over Supabase Realtime channel
-    globalRealtimeChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'peer_chat_message',
-      payload: { ...userMsg, receiverId: peerId },
-    });
+    // 3. Live broadcast to peer over Supabase Realtime channel
+    try {
+      globalRealtimeChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'peer_chat_message',
+        payload: { ...userMsg, receiverId: peerId },
+      });
+    } catch { }
+
+    // 4. Live broadcast over local browser tab sync
+    try {
+      localBroadcastChannelRef.current?.postMessage({
+        type: 'peer_chat_message',
+        payload: { ...userMsg, receiverId: peerId },
+      });
+    } catch { }
+
+    // 5. Intelligent interactive peer response simulation (for demo peers or test personas)
+    const targetPeer = allUsers.find(u => u.id === peerId);
+    const isDemoPersona = !targetPeer?.email || targetPeer.id.startsWith('user-') || targetPeer.id.startsWith('mock-') || peerId === 'guest';
+    if (isDemoPersona) {
+      setTimeout(() => {
+        setIsPeerTyping(prev => ({ ...prev, [peerId]: true }));
+      }, 500);
+
+      setTimeout(() => {
+        setIsPeerTyping(prev => ({ ...prev, [peerId]: false }));
+        const peerName = targetPeer?.name || 'Peer Mentor';
+        const peerAvatar = targetPeer?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
+        const peerTeachSkill = targetPeer?.skillsToTeach[0]?.skillName || 'Technical Skills';
+
+        let replyText = `Awesome! I'd love to help you with ${peerTeachSkill}. Let's do a 30-min hands-on barter session!`;
+        const lower = text.toLowerCase();
+        if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
+          replyText = `Hey ${currentUser.name}! Great to connect with you. I'm ready to practice ${peerTeachSkill} whenever you are! 🚀`;
+        } else if (lower.includes('room') || lower.includes('meet') || lower.includes('call') || lower.includes('video')) {
+          replyText = `Sounds great! Hit the "Room" button at the top right of this chat and I'll jump right in.`;
+        } else if (lower.includes('swap') || lower.includes('barter') || lower.includes('trade')) {
+          replyText = `I just reviewed your skills! I'm happy to teach ${peerTeachSkill} in exchange for ${currentUser.skillsToTeach[0]?.skillName || 'your offerings'}.`;
+        } else if (lower.includes('help') || lower.includes('doubt') || lower.includes('question')) {
+          replyText = `Definitely! Tell me which specific concept you're stuck on, or we can share our screen in the Study Room to debug it together.`;
+        }
+
+        const peerReplyMsg: PeerChatMessage = {
+          id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          senderId: peerId,
+          senderName: peerName,
+          senderAvatar: peerAvatar,
+          text: replyText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isMe: false,
+          status: 'delivered',
+        };
+
+        setPeerConversations(prev => ({
+          ...prev,
+          [peerId]: [...(prev[peerId] || []), peerReplyMsg],
+        }));
+
+        saveChatMessageToDB(peerId, currentUser.id, peerReplyMsg);
+      }, 1800);
+    }
   };
 
   const clearPeerChat = (peerId: string) => {
@@ -1138,6 +1500,92 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updated : u)));
     updateProfileInDB(currentUser.id, { bio, headline });
     showToast('Profile updated successfully!', 'success');
+  };
+
+  const updateCurrentUserFullProfile = async (updates: Partial<UserProfile>): Promise<boolean> => {
+    const updated: UserProfile = { ...currentUser, ...updates };
+    setCurrentUser(updated);
+    setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updated : u)));
+
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.handle !== undefined) dbUpdates.handle = updates.handle;
+    if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
+    if (updates.headline !== undefined) dbUpdates.headline = updates.headline;
+    if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+    if (updates.college !== undefined) dbUpdates.college_name = updates.college;
+    if (updates.email !== undefined) dbUpdates.email = updates.email;
+
+    await updateProfileInDB(currentUser.id, dbUpdates);
+    showToast('Profile updated successfully! ✨', 'success');
+    return true;
+  };
+
+  const requestEmailChange = async (newEmail: string): Promise<{ needsVerification: boolean; error: string | null }> => {
+    const cleanEmail = newEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      showToast('Please enter a valid email address.', 'warning');
+      return { needsVerification: false, error: 'Please enter a valid email address.' };
+    }
+    if (currentUser.email && currentUser.email.toLowerCase() === cleanEmail) {
+      showToast('New email is identical to your current email.', 'info');
+      return { needsVerification: false, error: 'New email is identical to your current email.' };
+    }
+
+    const res = await updateUserEmail(cleanEmail);
+    if (res.error) {
+      showToast(res.error, 'warning');
+      return res;
+    }
+
+    if (res.needsVerification) {
+      showToast(`Verification email sent to ${cleanEmail}! Please confirm link in your inbox.`, 'info');
+    } else {
+      const updated: UserProfile = { ...currentUser, email: cleanEmail };
+      setCurrentUser(updated);
+      setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updated : u)));
+      await updateProfileInDB(currentUser.id, { email: cleanEmail });
+      showToast('Email updated successfully!', 'success');
+    }
+    return res;
+  };
+
+  const editSkillToTeach = (skillId: string, updates: Partial<UserSkillOffering>) => {
+    const updatedTeach = currentUser.skillsToTeach.map(s => (s.skillId === skillId ? { ...s, ...updates } : s));
+    const updatedUser = { ...currentUser, skillsToTeach: updatedTeach };
+    setCurrentUser(updatedUser);
+    setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updatedUser : u)));
+
+    const target = updatedTeach.find(s => s.skillId === skillId);
+    if (target) {
+      updateTeachingSkillInDB(skillId, {
+        skill_name: target.skillName,
+        category: target.category,
+        level: target.level,
+        years_experience: target.yearsExperience,
+        hourly_rate_credits: target.hourlyRateCredits,
+        hourly_rate_inr: target.hourlyRateInr,
+      });
+    }
+    showToast('Teaching skill updated!', 'success');
+  };
+
+  const editSkillToLearn = (skillId: string, updates: Partial<UserLearningGoal>) => {
+    const updatedLearn = currentUser.skillsToLearn.map(g => (g.skillId === skillId ? { ...g, ...updates } : g));
+    const updatedUser = { ...currentUser, skillsToLearn: updatedLearn };
+    setCurrentUser(updatedUser);
+    setAllUsers(prev => prev.map(u => (u.id === currentUser.id ? updatedUser : u)));
+
+    const target = updatedLearn.find(g => g.skillId === skillId);
+    if (target) {
+      updateLearningGoalInDB(skillId, {
+        skill_name: target.skillName,
+        target_level: target.targetLevel,
+        urgency: target.urgency,
+        progress_percent: target.progressPercent,
+      });
+    }
+    showToast('Learning goal updated!', 'success');
   };
 
   // Dynamic Skill Offering Addition & DB Sync
@@ -1381,7 +1829,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (saved) {
           setSwapProposals(JSON.parse(saved));
         }
-      } catch {}
+      } catch { }
     }
   }, [currentUser.id]);
 
@@ -1390,7 +1838,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (typeof window !== 'undefined' && currentUser.id) {
       try {
         localStorage.setItem(`skillxchange_proposals_${currentUser.id}`, JSON.stringify(list));
-      } catch {}
+      } catch { }
     }
   };
 
@@ -1472,11 +1920,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     showToast(`Bilateral barter request sent to ${targetName}! (${offeredSkill} ⇄ ${wantedSkill})`, 'success');
-
-    // Auto peer response simulation for demo peers
-    setTimeout(() => {
-      acceptExchangeProposal(newProposal.id, true);
-    }, 2800);
   };
 
   const acceptExchangeProposal = (proposalId: string, isFromPeer = false) => {
@@ -1492,7 +1935,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (typeof window !== 'undefined' && currentUser.id) {
         try {
           localStorage.setItem(`skillxchange_proposals_${currentUser.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
       return updated;
     });
@@ -1539,7 +1982,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (typeof window !== 'undefined' && currentUser.id) {
         try {
           localStorage.setItem(`skillxchange_proposals_${currentUser.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
       return updated;
     });
@@ -1624,13 +2067,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         showToast(`Micro-Quiz submitted with ${mastery}%. Minimum 70% required for credit reward.`, 'info');
       }
 
-      return { score, total, passed: mastery >= 70 };
+      return { score, total, passed: mastery >= 66 };
     }
-    return { score: 3, total: 3, passed: true };
+    return { score: 0, total: 3, passed: false };
   };
 
   // Dynamic Credit Transfer & Transaction Log
-  const transferCredits = (toUserId: string, amount: number, reason: string) => {
+  const transferCredits = async (toUserId: string, amount: number, reason: string) => {
+    if (!toUserId || toUserId === currentUser.id) {
+      showToast('Cannot transfer credits to yourself.', 'warning');
+      return;
+    }
+
     if (currentUser.creditsBalance < amount) {
       showToast(`Insufficient balance! (Available: ${currentUser.creditsBalance.toFixed(1)} CR)`, 'warning');
       return;
@@ -1667,21 +2115,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTransactions(prev => [newTxn, ...prev]);
 
-    // Backend sync
-    recordCreditTransactionInDB(
-      currentUser.id,
-      `Transfer to ${recipientUser?.name || 'peer'}: ${reason}`,
-      -amount,
-      newBalance
-    );
-
-    if (toUserId) {
+    // Backend sync: Attempt atomic Postgres RPC first
+    const atomicRes = await transferCreditsAtomicInDB(toUserId, amount, reason);
+    if (!atomicRes.success) {
       recordCreditTransactionInDB(
-        toUserId,
-        `Received from ${currentUser.name}: ${reason}`,
-        +amount,
-        recipientNewBalance
+        currentUser.id,
+        `Transfer to ${recipientUser?.name || 'peer'}: ${reason}`,
+        -amount,
+        newBalance
       );
+
+      if (toUserId) {
+        recordCreditTransactionInDB(
+          toUserId,
+          `Received from ${currentUser.name}: ${reason}`,
+          +amount,
+          recipientNewBalance
+        );
+      }
     }
 
     showToast(`Transferred ${amount} CR. New Balance: ${newBalance.toFixed(1)} CR`, 'success');
@@ -1848,19 +2299,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Credential Ledger SHA-256 Block Minting
-  const generateNewCredentialBlock = (learnerName: string, learnerId: string, skillName: string, scorePct: number) => {
+  const generateNewCredentialBlock = async (learnerName: string, learnerId: string, skillName: string, scorePct: number) => {
     const lastBlock = credentialLedger[credentialLedger.length - 1];
     const newIndex = lastBlock ? lastBlock.blockIndex + 1 : 1;
-    const prevHash = lastBlock ? lastBlock.blockHash : '00000000000000000000000000000000';
+    const prevHash = lastBlock ? lastBlock.blockHash : '0000000000000000000000000000000000000000000000000000000000000000';
+    const timestamp = new Date().toISOString();
 
-    const dataString = `${newIndex}-${learnerId}-${skillName}-${scorePct}-${Date.now()}-${prevHash}`;
-    let hash = 0;
-    for (let i = 0; i < dataString.length; i++) {
-      const char = dataString.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    const blockHash = Math.abs(hash).toString(16).padStart(32, '0') + 'a7f9b23c4d5e8912';
+    const dataPayload = `${newIndex}|${learnerId}|${currentUser.id}|${skillName}|${scorePct}|${timestamp}|${prevHash}`;
+    const blockHash = await computeSha256(dataPayload);
 
     const newBlock: CredentialBlock = {
       blockIndex: newIndex,
@@ -1873,10 +2319,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       levelEarned: 'Intermediate',
       sessionCount: 1,
       quizScorePct: scorePct,
-      timestamp: new Date().toISOString(),
+      timestamp,
       previousHash: prevHash,
       blockHash,
-      digitalSignature: `SIG_AI_ECDSA_${blockHash.slice(0, 16)}`,
+      digitalSignature: `SIG_SHA256_ED25519_${blockHash.slice(0, 24)}`,
       verificationUrl: `https://verify.skillexchange.org/cert/CERT-2026-${Date.now().toString().slice(-4)}`,
       status: 'immutable_verified',
     };
@@ -1951,26 +2397,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Session completed! Transcript summary and micro-quiz generated.', 'info');
   };
 
-  const releaseEscrow = () => {
-    if (activeSession) {
-      setActiveSession(prev => (prev ? { ...prev, escrowStatus: 'learner_confirmed_released' } : null));
-      const isTeacher = currentUser.name === activeSession.teacherName;
-      if (isTeacher) {
-        const reward = 1.4;
-        const newBalance = Number((currentUser.creditsBalance + reward).toFixed(1));
-        setCurrentUser(prev => ({
-          ...prev,
-          creditsBalance: newBalance,
-          totalCreditsEarned: prev.totalCreditsEarned + reward,
-        }));
-        const newTxn: LedgerTransaction = {
-          id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
-          date: new Date().toISOString().split('T')[0],
-          desc: `Escrow Settlement: ${activeSession.title}`,
-          delta: +reward,
-          balance: newBalance,
-        };
-        setTransactions(prev => [newTxn, ...prev]);
+  const releaseEscrow = async () => {
+    if (!activeSession) return;
+    if (activeSession.escrowStatus === 'learner_confirmed_released') {
+      showToast('Escrow has already been released for this session.', 'info');
+      return;
+    }
+
+    setActiveSession(prev => (prev ? { ...prev, escrowStatus: 'learner_confirmed_released' } : null));
+    const isTeacher = currentUser.name === activeSession.teacherName;
+    if (isTeacher) {
+      const reward = 1.4;
+      const newBalance = Number((currentUser.creditsBalance + reward).toFixed(1));
+      setCurrentUser(prev => ({
+        ...prev,
+        creditsBalance: newBalance,
+        totalCreditsEarned: prev.totalCreditsEarned + reward,
+      }));
+      const newTxn: LedgerTransaction = {
+        id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toISOString().split('T')[0],
+        desc: `Escrow Settlement: ${activeSession.title}`,
+        delta: +reward,
+        balance: newBalance,
+      };
+      setTransactions(prev => [newTxn, ...prev]);
+
+      const atomicRes = await releaseEscrowAtomicInDB(currentUser.id, reward, activeSession.title);
+      if (!atomicRes.success) {
         recordCreditTransactionInDB(
           currentUser.id,
           `Escrow Settlement: ${activeSession.title}`,
@@ -1978,8 +2432,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           newBalance
         );
       }
-      showToast('Escrow released! 1.4 Credits transferred to teacher wallet.', 'success');
     }
+    showToast('Escrow released! 1.4 Credits transferred to teacher wallet.', 'success');
   };
 
   const markNotificationAsRead = (id: string) => {
@@ -1995,10 +2449,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         allUsers,
         switchUser,
         updateCurrentUserProfile,
+        updateCurrentUserFullProfile,
+        requestEmailChange,
         skills,
         addSkillToTeach,
+        editSkillToTeach,
         removeSkillToTeach,
         addSkillToLearn,
+        editSkillToLearn,
         removeSkillToLearn,
         updateLearningGoalProgress,
         candidates,
@@ -2062,6 +2520,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openChatWithPeer,
         closeChat,
         sendPeerMessage,
+        sendPeerTyping,
         clearPeerChat,
         isAuthenticated,
         isAuthLoading,

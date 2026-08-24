@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Coins, Send, TrendingUp, ArrowUpRight, ArrowDownRight, ShieldCheck } from 'lucide-react';
 
@@ -14,12 +14,18 @@ export const WalletScreen: React.FC = () => {
     adjustSkillDemand,
   } = useApp();
 
+  const otherUsers = allUsers.filter(u => u.id !== currentUser.id && u.role !== 'admin');
+
   // Peer Transfer Form
-  const [targetUserId, setTargetUserId] = useState(allUsers[1]?.id || '');
+  const [targetUserId, setTargetUserId] = useState(otherUsers[0]?.id || '');
   const [transferAmount, setTransferAmount] = useState(1.5);
   const [transferReason, setTransferReason] = useState('1 hr Advanced Python Vectorization Mentorship');
 
-  const otherUsers = allUsers.filter(u => u.id !== currentUser.id && u.role !== 'admin');
+  useEffect(() => {
+    if (otherUsers.length > 0 && (!targetUserId || !otherUsers.some(u => u.id === targetUserId))) {
+      setTargetUserId(otherUsers[0].id);
+    }
+  }, [otherUsers, targetUserId]);
 
   const handleTransferSubmit = (e: React.FormEvent) => {
     e.preventDefault();

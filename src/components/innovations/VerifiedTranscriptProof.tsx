@@ -129,9 +129,9 @@ export const VerifiedTranscriptProof: React.FC = () => {
 
       {/* Interactive Micro-Quiz Modal */}
       {activeQuizProof && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="glass-panel-emerald rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-emerald-500/50 space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setActiveQuizProof(null)}>
+          <div className="bg-slate-900 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-emerald-500/50 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0 bg-slate-900">
               <div>
                 <span className="text-[10.5px] uppercase font-bold text-emerald-400 tracking-wider">
                   Session #{activeQuizProof.sessionId} • AI-Generated Micro-Quiz
@@ -142,67 +142,69 @@ export const VerifiedTranscriptProof: React.FC = () => {
               </div>
               <button
                 onClick={() => setActiveQuizProof(null)}
-                className="text-slate-400 hover:text-white text-xs font-bold"
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-bold"
               >
-                ✕ Close
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleQuizSubmit} className="space-y-6 text-xs">
-              {activeQuizProof.quizQuestions.map((q, qIdx) => (
-                <div key={q.id} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-bold text-white text-xs">
-                      {qIdx + 1}. {q.question}
-                    </span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 shrink-0">
-                      Concept: {q.conceptTested}
-                    </span>
-                  </div>
+            <form onSubmit={handleQuizSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs">
+              <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                {activeQuizProof.quizQuestions.map((q, qIdx) => (
+                  <div key={q.id} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-bold text-white text-xs">
+                        {qIdx + 1}. {q.question}
+                      </span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 shrink-0">
+                        Concept: {q.conceptTested}
+                      </span>
+                    </div>
 
-                  <div className="space-y-2">
-                    {q.options.map((opt, optIdx) => (
-                      <label
-                        key={optIdx}
-                        onClick={() => handleSelectOption(qIdx, optIdx)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                          selectedAnswers[qIdx] === optIdx
-                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-200 font-semibold'
-                            : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800/60'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={`question-${q.id}`}
-                          checked={selectedAnswers[qIdx] === optIdx}
-                          onChange={() => handleSelectOption(qIdx, optIdx)}
-                          className="accent-emerald-500"
-                        />
-                        <span>{opt}</span>
-                      </label>
-                    ))}
+                    <div className="space-y-2">
+                      {q.options.map((opt, optIdx) => (
+                        <label
+                          key={optIdx}
+                          onClick={() => handleSelectOption(qIdx, optIdx)}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                            selectedAnswers[qIdx] === optIdx
+                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-200 font-semibold'
+                              : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800/60'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name={`question-${q.id}`}
+                            checked={selectedAnswers[qIdx] === optIdx}
+                            onChange={() => handleSelectOption(qIdx, optIdx)}
+                            className="accent-emerald-500"
+                          />
+                          <span>{opt}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
+                ))}
+
+                <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Passing this quiz appends a tamper-evident credential block to the Cryptographic Ledger!
+                  </span>
                 </div>
-              ))}
-
-              <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>
-                  Passing this quiz appends a tamper-evident credential block to the Cryptographic Ledger!
-                </span>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-800 bg-slate-950/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveQuizProof(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold hover:bg-slate-700"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-semibold hover:bg-slate-700 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold shadow-lg shadow-emerald-500/25"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold shadow-lg shadow-emerald-500/25 cursor-pointer"
                 >
                   Submit & Mint Verifiable Proof
                 </button>

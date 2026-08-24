@@ -501,39 +501,41 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
 
       {/* ── ADD SKILL MODAL ─────────────────────────────────── */}
       {showAddSkillModal && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowAddSkillModal(false)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowAddSkillModal(false)}>
           <div
-            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-slide-down sm:animate-fade-scale"
+            className="bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-5 sm:p-7 space-y-5">
-              <div className="flex items-center justify-between">
-                <h3 className="font-display font-bold text-base sm:text-lg text-slate-900">
-                  Add {skillType === 'teach' ? 'Teaching' : 'Learning'} Skill
-                </h3>
-                <button onClick={() => setShowAddSkillModal(false)} className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <h3 className="font-display font-bold text-base sm:text-lg text-slate-900">
+                Add {skillType === 'teach' ? 'Teaching' : 'Learning'} Skill
+              </h3>
+              <button onClick={() => setShowAddSkillModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-              {/* Teach / Learn Toggle */}
-              <div className="grid grid-cols-2 gap-2 p-1 rounded-full bg-slate-100 border border-slate-200">
-                {(['teach', 'learn'] as const).map(type => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setSkillType(type)}
-                    className={`py-2 text-xs font-bold rounded-full transition-all ${skillType === type
-                        ? type === 'teach' ? 'bg-amber-500 text-white shadow-sm' : 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                  >
-                    {type === 'teach' ? 'I can Teach' : 'I want to Learn'}
-                  </button>
-                ))}
-              </div>
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleAddSkillSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+                {/* Teach / Learn Toggle */}
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-100 border border-slate-200">
+                  {(['teach', 'learn'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setSkillType(type)}
+                      className={`py-2 text-xs font-bold rounded-xl transition-all ${skillType === type
+                          ? type === 'teach' ? 'bg-amber-500 text-white shadow-xs' : 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                      {type === 'teach' ? 'I can Teach' : 'I want to Learn'}
+                    </button>
+                  ))}
+                </div>
 
-              <form onSubmit={handleAddSkillSubmit} className="space-y-4 text-xs">
                 <div className="space-y-1.5">
                   <label className="text-slate-800 font-bold block">Skill Name</label>
                   <input
@@ -541,7 +543,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
                     placeholder="e.g. Python, Guitar, Figma..."
                     value={skillName}
                     onChange={e => setSkillName(e.target.value)}
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm"
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-slate-900"
                     required
                     autoFocus
                   />
@@ -550,7 +552,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-slate-800 font-bold block">Category</label>
-                    <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900">
+                    <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900">
                       {['Programming', 'Languages', 'Design', 'Arts & Music', 'Soft Skills', 'Science', 'Business'].map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -558,7 +560,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-slate-800 font-bold block">Level</label>
-                    <select value={level} onChange={e => setLevel(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900">
+                    <select value={level} onChange={e => setLevel(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900">
                       {['Beginner', 'Intermediate', 'Advanced', 'Expert'].map(l => (
                         <option key={l} value={l}>{l}</option>
                       ))}
@@ -572,25 +574,26 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ currentTab, onSelectTab })
                     <input
                       type="number" min={1} max={30} value={years}
                       onChange={e => setYears(Number(e.target.value))}
-                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono-ledger"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono-ledger focus:outline-none focus:border-slate-900"
                     />
                   </div>
                 )}
+              </div>
 
-                <div className="flex items-center gap-3 pt-2">
-                  <button type="button" onClick={() => setShowAddSkillModal(false)} className="flex-1 py-3 rounded-full bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition-colors text-xs">
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className={`flex-1 py-3 rounded-full text-white font-bold text-xs transition-all active:scale-95 ${skillType === 'teach' ? 'bg-amber-500 hover:bg-amber-600 shadow-sm' : 'bg-emerald-600 hover:bg-emerald-700 shadow-sm'
-                      }`}
-                  >
-                    Add {skillType === 'teach' ? 'Skill to Teach' : 'Learning Goal'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              {/* Pinned Footer */}
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
+                <button type="button" onClick={() => setShowAddSkillModal(false)} className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-colors text-xs">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs transition-all shadow-xs cursor-pointer ${skillType === 'teach' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
+                >
+                  Add {skillType === 'teach' ? 'Skill to Teach' : 'Learning Goal'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

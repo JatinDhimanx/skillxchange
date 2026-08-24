@@ -43,6 +43,8 @@ export const FusionSessions: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('All Fusions');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedFusionForModal, setSelectedFusionForModal] = useState<FusionSessionOption | null>(null);
+  const [customGoalNote, setCustomGoalNote] = useState('');
   const [requestedFusions, setRequestedFusions] = useState<Record<string, boolean>>({});
 
   // Propose Fusion Form State
@@ -73,8 +75,17 @@ export const FusionSessions: React.FC = () => {
 
   // Handle Request Fusion
   const handleRequest = (fusion: FusionSessionOption) => {
-    requestFusionSession(fusion.id);
-    setRequestedFusions(prev => ({ ...prev, [fusion.id]: true }));
+    setSelectedFusionForModal(fusion);
+    setCustomGoalNote(`Looking to accelerate my workflow by synthesizing ${fusion.primarySkill} and ${fusion.secondarySkill}!`);
+  };
+
+  const handleConfirmMatchRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFusionForModal) return;
+    requestFusionSession(selectedFusionForModal.id);
+    setRequestedFusions(prev => ({ ...prev, [selectedFusionForModal.id]: true }));
+    showToast(`Cross-Skill Match requested for "${selectedFusionForModal.title}"! 🚀`, 'success');
+    setSelectedFusionForModal(null);
   };
 
   // Launch Directly into Live Study Room
@@ -99,7 +110,8 @@ export const FusionSessions: React.FC = () => {
     setIsCalculatingAI(true);
     setTimeout(() => {
       setIsCalculatingAI(false);
-      const calculated = Math.floor(Math.random() * 8) + 91; // 91-98%
+      const seed = (primarySkill.trim().length * 7 + secondarySkill.trim().length * 13) % 8;
+      const calculated = 91 + seed;
       setCompatibilityScore(calculated);
       if (!fusionTitle) {
         setFusionTitle(`${primarySkill} & ${secondarySkill} Hybrid Studio`);
@@ -110,7 +122,7 @@ export const FusionSessions: React.FC = () => {
         );
       }
       showToast(`AI calculated ${calculated}% Cognitive Synergy! ✨`, 'success');
-    }, 500);
+    }, 400);
   };
 
   // Submit New Fusion Form
@@ -332,9 +344,9 @@ export const FusionSessions: React.FC = () => {
 
       {/* ── PROPOSE FUSION MODAL ─────────────────────────────────────────── */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 animate-scale-up">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setShowCreateModal(false)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
                   <Sparkles className="w-5 h-5" />
@@ -345,124 +357,242 @@ export const FusionSessions: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Primary Skill (Track A) *
+                    </label>
+                    <input
+                      type="text"
+                      value={primarySkill}
+                      onChange={e => setPrimarySkill(e.target.value)}
+                      placeholder="e.g. Python Backend"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Secondary Skill (Track B) *
+                    </label>
+                    <input
+                      type="text"
+                      value={secondarySkill}
+                      onChange={e => setSecondarySkill(e.target.value)}
+                      placeholder="e.g. UI/UX Figma"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* AI Auto-Calculate Button */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleCalculateAISynergy}
+                    disabled={isCalculatingAI || (!primarySkill && !secondarySkill)}
+                    className="text-xs font-mono-ledger font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Brain className="w-3.5 h-3.5" />
+                    <span>{isCalculatingAI ? 'Calculating Synergy...' : '⚡ AI Calculate Synergy'}</span>
+                  </button>
+                </div>
+
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Primary Skill (Track A) *
+                    Fusion Workshop Title *
                   </label>
                   <input
                     type="text"
-                    value={primarySkill}
-                    onChange={e => setPrimarySkill(e.target.value)}
-                    placeholder="e.g. Python Backend"
+                    value={fusionTitle}
+                    onChange={e => setFusionTitle(e.target.value)}
+                    placeholder="e.g. Full-Stack AI Engineer & Design Synthesis"
                     className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
                     required
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Secondary Skill (Track B) *
-                  </label>
-                  <input
-                    type="text"
-                    value={secondarySkill}
-                    onChange={e => setSecondarySkill(e.target.value)}
-                    placeholder="e.g. UI/UX Figma"
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                    required
-                  />
-                </div>
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Category Combination
+                    </label>
+                    <input
+                      type="text"
+                      value={categoryCombo}
+                      onChange={e => setCategoryCombo(e.target.value)}
+                      placeholder="e.g. Code + Design"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    />
+                  </div>
 
-              {/* AI Auto-Calculate Button */}
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleCalculateAISynergy}
-                  disabled={isCalculatingAI || (!primarySkill && !secondarySkill)}
-                  className="text-xs font-mono-ledger font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Brain className="w-3.5 h-3.5" />
-                  <span>{isCalculatingAI ? 'Calculating Synergy...' : '⚡ AI Calculate Synergy'}</span>
-                </button>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Fusion Workshop Title *
-                </label>
-                <input
-                  type="text"
-                  value={fusionTitle}
-                  onChange={e => setFusionTitle(e.target.value)}
-                  placeholder="e.g. Full-Stack AI Engineer & Design Synthesis"
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Category Combination
-                  </label>
-                  <input
-                    type="text"
-                    value={categoryCombo}
-                    onChange={e => setCategoryCombo(e.target.value)}
-                    placeholder="e.g. Code + Design"
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                  />
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Curriculum Time Split
+                    </label>
+                    <input
+                      type="text"
+                      value={suggestedSplit}
+                      onChange={e => setSuggestedSplit(e.target.value)}
+                      placeholder="e.g. 30m Code + 30m Design"
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Curriculum Time Split
+                    Cognitive Synergy Rationale
                   </label>
-                  <input
-                    type="text"
-                    value={suggestedSplit}
-                    onChange={e => setSuggestedSplit(e.target.value)}
-                    placeholder="e.g. 30m Code + 30m Design"
+                  <textarea
+                    rows={2}
+                    value={rationale}
+                    onChange={e => setRationale(e.target.value)}
+                    placeholder="Why does learning these two skills together accelerate mastery?"
                     className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Cognitive Synergy Rationale
-                </label>
-                <textarea
-                  rows={2}
-                  value={rationale}
-                  onChange={e => setRationale(e.target.value)}
-                  placeholder="Why does learning these two skills together accelerate mastery?"
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                 >
                   Publish Fusion Concept 🚀
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── CROSS-SKILL WORKSHOP MATCH REQUEST MODAL ──────────────────────── */}
+      {selectedFusionForModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setSelectedFusionForModal(null)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <h3 className="font-display font-bold text-lg text-slate-900">
+                  Request Cross-Skill Match
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedFusionForModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmMatchRequest} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+                {/* Header overview */}
+                <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono-ledger uppercase font-bold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-md">
+                      {selectedFusionForModal.categoryCombo}
+                    </span>
+                    <span className="font-mono-ledger font-black text-xs text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-emerald-600" /> {selectedFusionForModal.compatibilityScore}% Synergy
+                    </span>
+                  </div>
+                  <h4 className="font-display font-bold text-base text-slate-900">
+                    {selectedFusionForModal.title}
+                  </h4>
+                </div>
+
+                {/* Track A & Track B */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                    <span className="text-[10px] font-mono-ledger text-amber-700 uppercase font-bold block">
+                      Track A (First 30m)
+                    </span>
+                    <strong className="text-xs text-slate-900 block font-mono-ledger">
+                      {selectedFusionForModal.primarySkill}
+                    </strong>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                    <span className="text-[10px] font-mono-ledger text-emerald-700 uppercase font-bold block">
+                      Track B (Next 30m)
+                    </span>
+                    <strong className="text-xs text-slate-900 block font-mono-ledger">
+                      {selectedFusionForModal.secondarySkill}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Rationale */}
+                <div className="space-y-1">
+                  <span className="text-[10.5px] font-mono-ledger text-slate-500 uppercase font-bold">
+                    Cognitive Synergy Rationale:
+                  </span>
+                  <p className="text-slate-700 font-sans leading-relaxed p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
+                    &ldquo;{selectedFusionForModal.rationale}&rdquo;
+                  </p>
+                </div>
+
+                {/* Custom Goal Note */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                    Your Learning Goal & Focus Note:
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={customGoalNote}
+                    onChange={e => setCustomGoalNote(e.target.value)}
+                    placeholder="Tell your matched peer what project or drill you want to build during this session..."
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedFusionForModal(null)}
+                  className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleLaunchLiveRoom(selectedFusionForModal);
+                    setSelectedFusionForModal(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Video className="w-3.5 h-3.5" />
+                  <span>Launch Live Room</span>
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Confirm Match Request</span>
                 </button>
               </div>
             </form>

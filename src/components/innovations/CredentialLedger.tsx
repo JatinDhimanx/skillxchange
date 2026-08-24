@@ -407,9 +407,9 @@ export const CredentialLedger: React.FC = () => {
 
       {/* ── MINT VERIFIED BLOCK MODAL ────────────────────────────────────── */}
       {showMintModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 animate-scale-up">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in" onClick={() => setShowMintModal(false)}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                   <ShieldCheck className="w-5 h-5" />
@@ -420,97 +420,99 @@ export const CredentialLedger: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowMintModal(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleMintSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Learner / Recipient Peer *
-                </label>
-                <select
-                  value={targetLearnerName}
-                  onChange={e => setTargetLearnerName(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                >
-                  {allUsers.map(u => (
-                    <option key={u.id} value={u.name}>
-                      {u.name} ({u.college || 'Peer Member'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                  Verified Skill Track *
-                </label>
-                <input
-                  type="text"
-                  value={targetSkillName}
-                  onChange={e => setTargetSkillName(e.target.value)}
-                  placeholder="e.g. Full Stack Next.js & AI"
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleMintSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Micro-Quiz Score (%)
+                    Learner / Recipient Peer *
+                  </label>
+                  <select
+                    value={targetLearnerName}
+                    onChange={e => setTargetLearnerName(e.target.value)}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                  >
+                    {allUsers.map(u => (
+                      <option key={u.id} value={u.name}>
+                        {u.name} ({u.college || 'Peer Member'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                    Verified Skill Track *
                   </label>
                   <input
-                    type="number"
-                    min={80}
-                    max={100}
-                    value={quizScore}
-                    onChange={e => setQuizScore(Number(e.target.value))}
+                    type="text"
+                    value={targetSkillName}
+                    onChange={e => setTargetSkillName(e.target.value)}
+                    placeholder="e.g. Full Stack Next.js & AI"
                     className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
                     required
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
-                    Mastery Level
-                  </label>
-                  <select
-                    value={masteryLevel}
-                    onChange={e => setMasteryLevel(e.target.value as any)}
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
-                  >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Micro-Quiz Score (%)
+                    </label>
+                    <input
+                      type="number"
+                      min={80}
+                      max={100}
+                      value={quizScore}
+                      onChange={e => setQuizScore(Number(e.target.value))}
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono-ledger font-bold text-slate-700 uppercase">
+                      Mastery Level
+                    </label>
+                    <select
+                      value={masteryLevel}
+                      onChange={e => setMasteryLevel(e.target.value as any)}
+                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                    >
+                      <option value="Beginner">Beginner</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Advanced">Advanced</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 font-sans space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Mentor Attestation Notice:
+                  </p>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Signing this block uses your verified mentor identity (<strong>{currentUser.name}</strong>) and calculates the new block SHA-256 hash linked to the previous block hash.
+                  </p>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 font-sans space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Mentor Attestation Notice:
-                </p>
-                <p className="text-[11px] text-emerald-800 leading-relaxed">
-                  Signing this block uses your verified mentor identity (<strong>{currentUser.name}</strong>) and calculates the new block SHA-256 hash linked to the previous block hash.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowMintModal(false)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                 >
                   Sign & Mint Block ⛓️
                 </button>

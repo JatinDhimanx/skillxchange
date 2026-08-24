@@ -640,7 +640,7 @@ export const MatchesScreen: React.FC = () => {
       {/* 1. MODAL: LIST NEW SKILL TO TEACH / LEARN */}
       {/* ═════════════════════════════════════════════════════════════════ */}
       {isAddSkillModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex min-h-full items-center justify-center p-3 sm:p-6 text-center animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex min-h-full items-center justify-center p-3 sm:p-6 text-center animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 my-auto text-left max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setIsAddSkillModalOpen(false)}
@@ -786,7 +786,7 @@ export const MatchesScreen: React.FC = () => {
       {/* 2. MODAL: PEER FULL PROFILE & SKILL OFFERINGS */}
       {/* ═════════════════════════════════════════════════════════════════ */}
       {selectedPeerProfile && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex min-h-full items-center justify-center p-3 sm:p-6 text-center animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex min-h-full items-center justify-center p-3 sm:p-6 text-center animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 my-auto text-left max-h-[90vh] overflow-y-auto space-y-6 animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setSelectedPeerProfile(null)}
@@ -929,7 +929,7 @@ export const MatchesScreen: React.FC = () => {
       {/* 3. MODAL: PROPOSE BILATERAL BARTER SWAP */}
       {/* ═════════════════════════════════════════════════════════════════ */}
       {proposalModalPeer && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex min-h-full items-center justify-center p-3 sm:p-6 text-center animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex min-h-full items-center justify-center p-3 sm:p-6 text-center animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 my-auto text-left max-h-[90vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setProposalModalPeer(null)}

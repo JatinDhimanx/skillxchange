@@ -145,7 +145,7 @@ const MainAppContent: React.FC = () => {
 
       {/* ── REALTIME INCOMING STUDY ROOM CALL MODAL ───────────────── */}
       {incomingCallInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200">
           <div className="relative w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border-2 border-emerald-500/40 text-center space-y-5 animate-in zoom-in-95 duration-200">
             {/* Animated Ringing Ripple & Avatar */}
             <div className="relative mx-auto w-24 h-24 flex items-center justify-center">

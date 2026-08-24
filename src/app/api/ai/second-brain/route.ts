@@ -81,6 +81,13 @@ export async function POST(req: NextRequest) {
     const body: SecondBrainGenerateRequest = await req.json();
     const { topic = 'System Architecture', notesText = '', skillName = 'Computer Science' } = body;
 
+    if ((notesText && notesText.length > 6000) || (topic && topic.length > 300)) {
+      return NextResponse.json(
+        { error: 'Payload exceeds maximum allowed length (6,000 characters).' },
+        { status: 400 }
+      );
+    }
+
     const apiKey =
       process.env.GEMINI_API_KEY ||
       process.env.AI_API_KEY ||

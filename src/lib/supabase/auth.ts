@@ -177,6 +177,22 @@ export async function isHandleTaken(handle: string): Promise<boolean> {
   }
 }
 
+// ── 2b. Check Email Already Registered ────────────────────────────────────────
+export async function isEmailRegistered(email: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('email', email.trim().toLowerCase())
+      .maybeSingle();
+    if (error) return false; // fail-open
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
 // ── 2. Sign Up User with Email Verification Support ────────────────────────────
 export async function signUpUser(data: SignUpData): Promise<{
   user: UserProfile | null;
@@ -214,6 +230,17 @@ export async function signUpUser(data: SignUpData): Promise<{
     };
   }
 
+  // Check if email is already registered — surface a friendly "already exists"
+  // message instead of letting Supabase silently re-send a confirmation or
+  // return a confusing identity error.
+  if (await isEmailRegistered(data.email)) {
+    return {
+      user: null,
+      needsEmailVerification: false,
+      error: 'EMAIL_ALREADY_REGISTERED',
+    };
+  }
+
   try {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
@@ -239,100 +266,11 @@ export async function signUpUser(data: SignUpData): Promise<{
         errMsg.includes('security purposes');
 
       if (isRateLimit) {
-        // Fallback: create verified user profile directly to bypass device/IP rate limit
-        const fallbackUserId = `user-${Date.now()}`;
-        const handleClean = data.handle.startsWith('@') ? data.handle : `@${data.handle}`;
-
-        let fallbackProfileError: string | null = null;
-        try {
-          const { error: fallbackInsertError } = await supabase.from('profiles').upsert({
-            id: fallbackUserId,
-            email: data.email.trim().toLowerCase(),
-            name: data.name,
-            handle: handleClean,
-            avatar: avatarUrl,
-            headline: data.headline || 'Skill Exchange Enthusiast',
-            bio: `Hello! I am ${data.name}. Excited to barter skills on SkillXchange.`,
-            credit_balance: 5.0,
-            rating: 5.0,
-            trust_score: 90,
-            streak_days: 1,
-          });
-          if (fallbackInsertError) fallbackProfileError = fallbackInsertError.message;
-        } catch (e: any) {
-          fallbackProfileError = e?.message || 'Unknown error creating fallback profile.';
-        }
-
-        if (fallbackProfileError) {
-          return {
-            user: null,
-            needsEmailVerification: false,
-            error: `We couldn't create your account (${fallbackProfileError}). Please try a different handle or email.`,
-          };
-        }
-
-        const fallbackUser: UserProfile = {
-          id: fallbackUserId,
-          name: data.name,
-          handle: handleClean,
-          avatar: avatarUrl,
-          headline: data.headline || 'Skill Exchange Enthusiast',
-          bio: `Hello! I am ${data.name}. Excited to barter skills on SkillXchange.`,
-          location: 'India',
-          timezone: 'IST (UTC+5:30)',
-          college: 'Peer Network',
-          collegeVerified: true,
-          languages: ['English'],
-          skillsToTeach: data.teachSkill
-            ? [
-                {
-                  skillId: `teach-${Date.now()}`,
-                  skillName: data.teachSkill,
-                  category: 'General',
-                  level: 'Intermediate',
-                  yearsExperience: 1,
-                  verified: true,
-                  verificationBadge: 'Verified Peer',
-                  hourlyRateInr: 500,
-                  hourlyRateCredits: 1.0,
-                  proofCount: 1,
-                },
-              ]
-            : [],
-          skillsToLearn: data.learnSkill
-            ? [
-                {
-                  skillId: `learn-${Date.now()}`,
-                  skillName: data.learnSkill,
-                  targetLevel: 'Intermediate',
-                  urgency: 'flexible',
-                  progressPercent: 0,
-                },
-              ]
-            : [],
-          creditsBalance: 5.0,
-          totalCreditsEarned: 0,
-          totalCreditsSpent: 0,
-          teachingHours: 0,
-          learningHours: 0,
-          trustScore: {
-            identityVerified: true,
-            skillVerifiedCount: 1,
-            completedSessions: 0,
-            attendanceRate: 100,
-            averageRating: 5.0,
-            cancellationRate: 0,
-            responseRate: 100,
-            accountAgeMonths: 0,
-            overallScore: 90,
-          },
-          streakDays: 1,
-          xpPoints: 100,
-          badges: [],
-          role: 'user',
+        return {
+          user: null,
+          needsEmailVerification: false,
+          error: 'Email signup rate limit reached. Please wait a moment before trying again, or try logging in if you already have an account.',
         };
-
-        return { user: fallbackUser, needsEmailVerification: false, error: null };
       }
 
       if (errMsg.includes('database error saving new user')) {
@@ -740,4 +678,23 @@ export function onAuthStateChanged(callback: (event: string, session: any) => vo
   return () => {
     subscription.subscription.unsubscribe();
   };
+}
+
+// ── 10. Update User Email (with Verification Link) ───────────────────────────
+export async function updateUserEmail(newEmail: string): Promise<{ needsVerification: boolean; error: string | null }> {
+  if (!isSupabaseConfigured || !supabase) {
+    return { needsVerification: false, error: null };
+  }
+  try {
+    const { error } = await supabase.auth.updateUser(
+      { email: newEmail.trim().toLowerCase() },
+      { emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined }
+    );
+    if (error) {
+      return { needsVerification: false, error: error.message };
+    }
+    return { needsVerification: true, error: null };
+  } catch (err: any) {
+    return { needsVerification: false, error: err.message || 'Failed to update email.' };
+  }
 }

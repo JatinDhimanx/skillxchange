@@ -59,6 +59,7 @@ export interface TrustScoreBreakdown {
 
 export interface UserProfile {
   id: string;
+  email?: string;
   name: string;
   handle: string;
   avatar: string;

@@ -186,6 +186,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (transcript.length > 5000) {
+      return NextResponse.json(
+        { error: 'Transcript exceeds maximum allowed size (5,000 characters).' },
+        { status: 400 }
+      );
+    }
+
+    const cleanScenario = scenario.slice(0, 150).replace(/[^\w\s-]/gi, '');
+
     const apiKey =
       process.env.GEMINI_API_KEY ||
       process.env.AI_API_KEY ||

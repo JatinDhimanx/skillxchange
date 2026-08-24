@@ -208,118 +208,122 @@ export const SkillBountyBoard: React.FC = () => {
       {/* Modal: Post New Bounty */}
       {showNewBountyModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => setShowNewBountyModal(false)}
         >
           <div
-            className="paper-card rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl bg-white border border-slate-200 animate-in zoom-in-95 duration-200"
+            className="w-full max-w-lg max-h-[90vh] flex flex-col bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
               <h3 className="font-display font-bold text-lg text-slate-900 flex items-center gap-2">
                 <Target className="w-5 h-5 text-rose-600" /> Post Reverse Learning Bounty
               </h3>
               <button
                 onClick={() => setShowNewBountyModal(false)}
-                className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 font-bold"
               >
-                ✕ Close
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateBounty} className="space-y-4 text-xs font-sans">
-              <div className="space-y-1.5">
-                <label className="text-slate-800 font-bold">Bounty Title / Goal:</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Master GLSL Raymarching shaders for creative portfolio"
-                  value={bountyTitle}
-                  onChange={e => setBountyTitle(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateBounty} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs font-sans">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
                 <div className="space-y-1.5">
-                  <label className="text-slate-800 font-bold">Category:</label>
-                  <select
-                    value={bountyCategory}
-                    onChange={e => setBountyCategory(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900"
-                  >
-                    <option value="Languages">Languages</option>
-                    <option value="Programming">Programming</option>
-                    <option value="Design">Design & Creative</option>
-                    <option value="Music">Arts & Music</option>
-                    <option value="Soft Skills">Soft Skills</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-slate-800 font-bold">Target Skill:</label>
+                  <label className="text-slate-800 font-bold">Bounty Title / Goal:</label>
                   <input
                     type="text"
-                    value={bountySkill}
-                    onChange={e => setBountySkill(e.target.value)}
+                    placeholder="e.g. Master GLSL Raymarching shaders for creative portfolio"
+                    value={bountyTitle}
+                    onChange={e => setBountyTitle(e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900"
                     required
                   />
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-slate-800 font-bold">Detailed Requirements & Context:</label>
-                <textarea
-                  rows={3}
-                  placeholder="Describe your current level, weekly availability, and target deadline..."
-                  value={bountyDesc}
-                  onChange={e => setBountyDesc(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900"
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-800 font-bold">Category:</label>
+                    <select
+                      value={bountyCategory}
+                      onChange={e => setBountyCategory(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900"
+                    >
+                      <option value="Languages">Languages</option>
+                      <option value="Programming">Programming</option>
+                      <option value="Design">Design & Creative</option>
+                      <option value="Music">Arts & Music</option>
+                      <option value="Soft Skills">Soft Skills</option>
+                    </select>
+                  </div>
 
-              <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-800 font-bold">Target Skill:</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Three.js / WebGL"
+                      value={bountySkill}
+                      onChange={e => setBountySkill(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900"
+                      required
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
-                  <label className="text-slate-800 font-bold font-mono-ledger">Credits:</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={bountyCredits}
-                    onChange={e => setBountyCredits(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900 font-mono-ledger font-bold"
+                  <label className="text-slate-800 font-bold">Detailed Requirements & Project Specs:</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Describe what you want to achieve, your current background, and your target completion project..."
+                    value={bountyDesc}
+                    onChange={e => setBountyDesc(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900"
+                    required
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-slate-800 font-bold font-mono-ledger">Fiat (₹):</label>
-                  <input
-                    type="number"
-                    min={500}
-                    step={100}
-                    value={bountyInr}
-                    onChange={e => setBountyInr(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900 font-mono-ledger font-bold"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-slate-800 font-bold font-mono-ledger">Weeks:</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={24}
-                    value={bountyWeeks}
-                    onChange={e => setBountyWeeks(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900 font-mono-ledger font-bold"
-                  />
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-800 font-bold font-mono-ledger">Reward (CR):</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={bountyCredits}
+                      onChange={e => setBountyCredits(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900 font-mono-ledger font-bold"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-800 font-bold font-mono-ledger">Reward (INR):</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={50}
+                      value={bountyInr}
+                      onChange={e => setBountyInr(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900 font-mono-ledger font-bold"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-800 font-bold font-mono-ledger">Weeks:</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={bountyWeeks}
+                      onChange={e => setBountyWeeks(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-slate-900 font-mono-ledger font-bold"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowNewBountyModal(false)}
-                  className="px-4 py-2 rounded-full bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"
+                  className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50"
                 >
                   Cancel
                 </button>
@@ -338,73 +342,75 @@ export const SkillBountyBoard: React.FC = () => {
       {/* Modal: Submit Bid */}
       {selectedBountyForBid && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => setSelectedBountyForBid(null)}
         >
           <div
-            className="paper-card rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl bg-white border border-slate-200 animate-in zoom-in-95 duration-200"
+            className="w-full max-w-lg max-h-[90vh] flex flex-col bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
               <h3 className="font-display font-bold text-lg text-slate-900 flex items-center gap-2">
                 <Send className="w-5 h-5 text-amber-600" /> Submit Teacher Proposal
               </h3>
               <button
                 onClick={() => setSelectedBountyForBid(null)}
-                className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 font-bold"
               >
-                ✕ Close
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleBidSubmit} className="space-y-4 text-xs font-sans">
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                <p className="text-slate-500 text-[11px] font-mono-ledger">Bounty for {selectedBountyForBid.learnerName}:</p>
-                <p className="font-bold text-slate-900 text-xs mt-0.5">{selectedBountyForBid.title}</p>
-              </div>
+            <form onSubmit={handleBidSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs font-sans">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                  <p className="text-slate-500 text-[11px] font-mono-ledger">Bounty for {selectedBountyForBid.learnerName}:</p>
+                  <p className="font-bold text-slate-900 text-xs mt-0.5">{selectedBountyForBid.title}</p>
+                </div>
 
-              <div className="space-y-1.5">
-                <label className="text-slate-800 font-bold">Proposed Custom Curriculum & Milestones:</label>
-                <textarea
-                  rows={3}
-                  placeholder="Outline key milestones, session breakdown, and target outcomes..."
-                  value={proposedCurriculum}
-                  onChange={e => setProposedCurriculum(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-slate-800 font-bold font-mono-ledger">Total Sessions:</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={estimatedSessions}
-                    onChange={e => setEstimatedSessions(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500 font-mono-ledger font-bold"
+                  <label className="text-slate-800 font-bold">Proposed Custom Curriculum & Milestones:</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Outline key milestones, session breakdown, and target outcomes..."
+                    value={proposedCurriculum}
+                    onChange={e => setProposedCurriculum(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500"
                     required
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-slate-800 font-bold font-mono-ledger">Bid Price (Credits):</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={bidCredits}
-                    onChange={e => setBidCredits(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500 font-mono-ledger font-bold"
-                    required
-                  />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-800 font-bold font-mono-ledger">Total Sessions:</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={estimatedSessions}
+                      onChange={e => setEstimatedSessions(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500 font-mono-ledger font-bold"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-800 font-bold font-mono-ledger">Bid Price (Credits):</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={bidCredits}
+                      onChange={e => setBidCredits(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-amber-500 font-mono-ledger font-bold"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setSelectedBountyForBid(null)}
-                  className="px-4 py-2 rounded-full bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"
+                  className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50"
                 >
                   Cancel
                 </button>

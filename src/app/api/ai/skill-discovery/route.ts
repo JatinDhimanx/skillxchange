@@ -365,6 +365,13 @@ export async function POST(req: NextRequest) {
     const body: DiscoveryRequestBody = await req.json();
     const { conversationId = `disc-${Date.now()}`, message, history = [], context = {}, userProfile } = body;
 
+    if ((message && message.length > 2000) || (history && history.length > 50)) {
+      return NextResponse.json(
+        { error: 'Payload exceeds maximum allowed size.' },
+        { status: 400 }
+      );
+    }
+
     const apiKey =
       process.env.AI_API_KEY ||
       process.env.GEMINI_API_KEY ||
