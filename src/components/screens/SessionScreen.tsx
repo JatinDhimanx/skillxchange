@@ -267,7 +267,11 @@ export const SessionScreen: React.FC = () => {
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
       { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'stun:stun.services.mozilla.com' },
       {
         urls: [
           'turn:openrelay.metered.ca:80',
@@ -279,6 +283,44 @@ export const SessionScreen: React.FC = () => {
       },
     ],
     iceCandidatePoolSize: 10,
+  };
+
+  // Helper: Multi-stage progressive getUserMedia for maximum mobile device compatibility
+  const getRobustUserMedia = async (): Promise<MediaStream | null> => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      return null;
+    }
+    // Attempt 1: High quality user-facing camera
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+        audio: true,
+      });
+    } catch (e1) {
+      console.warn('High-res media request failed, trying mobile friendly constraints...', e1);
+    }
+    // Attempt 2: Basic front camera
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: true,
+      });
+    } catch (e2) {
+      console.warn('Front camera request failed, trying basic video+audio...', e2);
+    }
+    // Attempt 3: Any video + audio (e.g. tablet / single camera)
+    try {
+      return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (e3) {
+      console.warn('Basic video request failed, trying audio only...', e3);
+    }
+    // Attempt 4: Audio only (if camera permission denied or hardware unavailable)
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e4) {
+      console.error('All camera/mic attempts failed:', e4);
+      return null;
+    }
   };
 
   useEffect(() => {
@@ -390,25 +432,26 @@ export const SessionScreen: React.FC = () => {
     }
   }, [activeSession]);
 
-  // Media Capture Setup
+  // Media Capture Setup with robust mobile fallback
   useEffect(() => {
     let activeStream: MediaStream | null = null;
     if (sessionView === 'live_meeting' && !mediaStream) {
-      navigator.mediaDevices?.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-        audio: true,
-      }).then(stream => {
-        activeStream = stream;
-        setMediaStream(stream);
-        mediaStreamRef.current = stream;
-        setIsCameraActive(true);
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-          localVideoRef.current.play().catch(() => {});
+      getRobustUserMedia().then(stream => {
+        if (stream) {
+          activeStream = stream;
+          setMediaStream(stream);
+          mediaStreamRef.current = stream;
+          const hasVideo = stream.getVideoTracks().length > 0;
+          setIsCameraActive(hasVideo);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+            localVideoRef.current.play().catch(() => {});
+          }
+          showToast(hasVideo ? 'Camera & Microphone connected!' : 'Audio connected (Camera unavailable)', 'success');
+        } else {
+          setIsCameraActive(false);
+          showToast('Camera/Microphone access not granted on this device.', 'warning');
         }
-        showToast('Webcam and audio stream connected!', 'success');
-      }).catch(err => {
-        console.warn('Webcam permission not granted:', err);
       });
     }
     return () => {
@@ -889,22 +932,20 @@ export const SessionScreen: React.FC = () => {
       setIsCameraActive(newEnabled);
       showToast(newEnabled ? 'Camera resumed.' : 'Camera paused.', 'info');
     } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-          audio: true,
-        });
+      const stream = await getRobustUserMedia();
+      if (stream) {
         setMediaStream(stream);
         mediaStreamRef.current = stream;
-        setIsCameraActive(true);
+        const hasVideo = stream.getVideoTracks().length > 0;
+        setIsCameraActive(hasVideo);
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
           localVideoRef.current.play().catch(() => {});
         }
-        showToast('Webcam stream connected!', 'success');
-      } catch (err: any) {
+        showToast('Camera & Microphone connected!', 'success');
+      } else {
         setIsCameraActive(false);
-        showToast('Webcam permission not granted.', 'warning');
+        showToast('Camera permission not granted.', 'warning');
       }
     }
   };
@@ -941,22 +982,18 @@ export const SessionScreen: React.FC = () => {
       }
       setIsScreenSharing(false);
 
-      // Clear screen share preview
       if (screenSharePreviewRef.current) {
         screenSharePreviewRef.current.srcObject = null;
       }
 
-      // Restore local webcam to hostVideoRef (so we see local cam in main area when alone)
       if (localVideoRef.current && mediaStreamRef.current) {
         localVideoRef.current.srcObject = mediaStreamRef.current;
         localVideoRef.current.play().catch(() => {});
       }
 
-      // Switch peers back to webcam video track (or null if cam off)
       const camTrack = isCameraActive ? (mediaStreamRef.current?.getVideoTracks()[0] || null) : null;
       replaceVideoTrackOnAllPeers(camTrack);
 
-      // Broadcast stop
       realtimeChannelRef.current?.send({
         type: 'broadcast',
         event: 'screen_share_status',
@@ -964,31 +1001,30 @@ export const SessionScreen: React.FC = () => {
       });
       showToast('Screen sharing stopped.', 'info');
     } else {
+      // Check if getDisplayMedia is supported on current browser/device (iOS Safari / mobile webviews lack getDisplayMedia)
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+        showToast('📱 Screen sharing is restricted by Mobile OS (iOS/Android Webview). To share your screen, please open on a PC/Laptop browser!', 'warning');
+        return;
+      }
+
       // ── START screen sharing ──
       try {
+        // Simple constraints for max compatibility across desktop & mobile Chrome
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            displaySurface: 'monitor',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 },
-          } as any,
+          video: true,
           audio: false,
         });
         displayStreamRef.current = displayStream;
         setIsScreenSharing(true);
 
-        // Show the screen share in the dedicated preview ref (main stage)
         if (screenSharePreviewRef.current) {
           screenSharePreviewRef.current.srcObject = displayStream;
           screenSharePreviewRef.current.play().catch(() => {});
         }
 
-        // Replace video track on all connected peers
         const screenTrack = displayStream.getVideoTracks()[0];
         replaceVideoTrackOnAllPeers(screenTrack);
 
-        // Handle user pressing browser's native "Stop sharing" button
         screenTrack.onended = () => {
           if (displayStreamRef.current) {
             displayStreamRef.current.getTracks().forEach(t => t.stop());
@@ -999,7 +1035,6 @@ export const SessionScreen: React.FC = () => {
           }
           setIsScreenSharing(false);
 
-          // Restore local webcam
           if (localVideoRef.current && mediaStreamRef.current) {
             localVideoRef.current.srcObject = mediaStreamRef.current;
             localVideoRef.current.play().catch(() => {});
@@ -1016,7 +1051,6 @@ export const SessionScreen: React.FC = () => {
           showToast('Screen sharing ended.', 'info');
         };
 
-        // Broadcast start
         realtimeChannelRef.current?.send({
           type: 'broadcast',
           event: 'screen_share_status',
@@ -1033,11 +1067,15 @@ export const SessionScreen: React.FC = () => {
           },
         ]);
 
-        showToast('🖥️ Screen sharing started — peers can now see your screen!', 'success');
+        showToast('🖥️ Screen sharing active!', 'success');
       } catch (err: any) {
         setIsScreenSharing(false);
-        if (err.name !== 'NotAllowedError') {
-          showToast('Could not start screen sharing. Please try again.', 'warning');
+        if (err.name === 'NotAllowedError') {
+          showToast('Screen sharing permission cancelled.', 'info');
+        } else if (err.name === 'NotSupportedError' || err.name === 'TypeError') {
+          showToast('📱 Screen sharing is not supported on this mobile browser. Please use a Desktop browser!', 'warning');
+        } else {
+          showToast('Screen share error: ' + (err.message || 'Check browser permissions'), 'warning');
         }
       }
     }
