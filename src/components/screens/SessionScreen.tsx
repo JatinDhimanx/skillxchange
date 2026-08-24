@@ -285,41 +285,59 @@ export const SessionScreen: React.FC = () => {
     iceCandidatePoolSize: 10,
   };
 
-  // Helper: Multi-stage progressive getUserMedia for maximum mobile device compatibility
-  const getRobustUserMedia = async (): Promise<MediaStream | null> => {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      return null;
+  // Helper: Multi-stage progressive getUserMedia with error diagnostics for mobile device compatibility
+  const getRobustUserMedia = async (): Promise<{ stream: MediaStream | null; error?: string }> => {
+    if (typeof window !== 'undefined' && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return { stream: null, error: 'HTTPS_REQUIRED' };
     }
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      return { stream: null, error: 'NO_MEDIA_DEVICES' };
+    }
+
+    let lastErrorName = '';
+
     // Attempt 1: High quality user-facing camera
     try {
-      return await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
         audio: true,
       });
-    } catch (e1) {
-      console.warn('High-res media request failed, trying mobile friendly constraints...', e1);
+      return { stream };
+    } catch (e1: any) {
+      lastErrorName = e1.name || '';
+      console.warn('High-res media request failed:', e1);
     }
+
     // Attempt 2: Basic front camera
     try {
-      return await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
         audio: true,
       });
-    } catch (e2) {
-      console.warn('Front camera request failed, trying basic video+audio...', e2);
+      return { stream };
+    } catch (e2: any) {
+      lastErrorName = e2.name || lastErrorName;
+      console.warn('Front camera request failed:', e2);
     }
-    // Attempt 3: Any video + audio (e.g. tablet / single camera)
+
+    // Attempt 3: Any video + audio
     try {
-      return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    } catch (e3) {
-      console.warn('Basic video request failed, trying audio only...', e3);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      return { stream };
+    } catch (e3: any) {
+      lastErrorName = e3.name || lastErrorName;
+      console.warn('Basic video request failed:', e3);
     }
-    // Attempt 4: Audio only (if camera permission denied or hardware unavailable)
+
+    // Attempt 4: Audio only
     try {
-      return await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (e4) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      return { stream };
+    } catch (e4: any) {
+      lastErrorName = e4.name || lastErrorName;
       console.error('All camera/mic attempts failed:', e4);
-      return null;
+      return { stream: null, error: lastErrorName };
     }
   };
 
@@ -436,7 +454,7 @@ export const SessionScreen: React.FC = () => {
   useEffect(() => {
     let activeStream: MediaStream | null = null;
     if (sessionView === 'live_meeting' && !mediaStream) {
-      getRobustUserMedia().then(stream => {
+      getRobustUserMedia().then(({ stream, error }) => {
         if (stream) {
           activeStream = stream;
           setMediaStream(stream);
@@ -447,10 +465,14 @@ export const SessionScreen: React.FC = () => {
             localVideoRef.current.srcObject = stream;
             localVideoRef.current.play().catch(() => {});
           }
-          showToast(hasVideo ? 'Camera & Microphone connected!' : 'Audio connected (Camera unavailable)', 'success');
+          showToast(hasVideo ? 'Camera & Microphone connected!' : 'Microphone connected (Camera unavailable)', 'success');
         } else {
           setIsCameraActive(false);
-          showToast('Camera/Microphone access not granted on this device.', 'warning');
+          if (error === 'HTTPS_REQUIRED') {
+            showToast('🔒 Mobile OS requires HTTPS for camera. Please open the secure HTTPS URL!', 'warning');
+          } else if (error === 'NotAllowedError' || error === 'PermissionDeniedError') {
+            showToast('🚫 Camera permission blocked. Tap "Enable Cam" on your video tile to grant permission.', 'warning');
+          }
         }
       });
     }
@@ -932,7 +954,7 @@ export const SessionScreen: React.FC = () => {
       setIsCameraActive(newEnabled);
       showToast(newEnabled ? 'Camera resumed.' : 'Camera paused.', 'info');
     } else {
-      const stream = await getRobustUserMedia();
+      const { stream, error } = await getRobustUserMedia();
       if (stream) {
         setMediaStream(stream);
         mediaStreamRef.current = stream;
@@ -942,10 +964,18 @@ export const SessionScreen: React.FC = () => {
           localVideoRef.current.srcObject = stream;
           localVideoRef.current.play().catch(() => {});
         }
-        showToast('Camera & Microphone connected!', 'success');
+        showToast(hasVideo ? 'Camera & Microphone connected!' : 'Microphone connected (Camera unavailable)', 'success');
       } else {
         setIsCameraActive(false);
-        showToast('Camera permission not granted.', 'warning');
+        if (error === 'HTTPS_REQUIRED') {
+          showToast('🔒 Mobile OS requires HTTPS to access camera & mic. Please open the secure HTTPS URL!', 'warning');
+        } else if (error === 'NotAllowedError' || error === 'PermissionDeniedError') {
+          showToast('🚫 Camera permission blocked! Please tap the lock icon in your browser URL bar -> Site Settings -> Allow Camera.', 'warning');
+        } else if (error === 'NotReadableError' || error === 'TrackStartError') {
+          showToast('📷 Camera is in use by another app (WhatsApp/Instagram). Close it and tap Enable Cam again.', 'warning');
+        } else {
+          showToast('Camera permission not granted. Please allow camera access in browser settings.', 'warning');
+        }
       }
     }
   };
@@ -1888,12 +1918,17 @@ export const SessionScreen: React.FC = () => {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center flex-col text-center p-1 sm:p-2">
-                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-emerald-600 text-white font-bold text-[10px] sm:text-xs flex items-center justify-center mb-0.5 sm:mb-1">
-                        {currentUser?.name?.[0] || 'U'}
+                    <button
+                      type="button"
+                      onClick={toggleCamera}
+                      className="w-full h-full flex items-center justify-center flex-col text-center p-1 sm:p-2 bg-slate-900/95 hover:bg-slate-800 transition-colors cursor-pointer"
+                      title="Tap to enable camera & microphone"
+                    >
+                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-emerald-600 text-white font-bold text-[10px] sm:text-xs flex items-center justify-center mb-0.5 sm:mb-1 shadow-xs">
+                        <VideoIcon className="w-3.5 h-3.5" />
                       </div>
-                      <span className="text-[9px] sm:text-[10px] text-slate-300 font-mono-ledger truncate w-full">You</span>
-                    </div>
+                      <span className="text-[9px] sm:text-[10px] text-emerald-400 font-bold font-mono-ledger truncate w-full">Enable Cam</span>
+                    </button>
                   )}
                   <div className="absolute bottom-0.5 left-1 sm:bottom-1 sm:left-2 text-[8px] sm:text-[9px] font-mono-ledger text-white/90 flex items-center gap-1">
                     <span className={`w-1.5 h-1.5 rounded-full ${isMuted ? 'bg-rose-500' : 'bg-emerald-400'}`}></span>
@@ -1940,10 +1975,18 @@ export const SessionScreen: React.FC = () => {
                   ) : isCameraActive ? (
                     <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                   ) : (
-                    <div className="text-center space-y-1.5 p-2">
+                    <button
+                      type="button"
+                      onClick={toggleCamera}
+                      className="w-full h-full flex items-center justify-center flex-col text-center p-2 bg-slate-900/95 hover:bg-slate-800 transition-colors cursor-pointer space-y-1.5"
+                    >
                       <img src={currentUser?.avatar} alt={currentUser?.name} className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-emerald-400 mx-auto" />
                       <p className="text-[11px] sm:text-xs font-bold text-white">{currentUser?.name} (You)</p>
-                    </div>
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white text-[10px] font-bold shadow-xs flex items-center gap-1">
+                        <VideoIcon className="w-3 h-3" />
+                        <span>Tap to Enable Camera</span>
+                      </span>
+                    </button>
                   )}
                   <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-lg bg-slate-950/80 text-[9px] sm:text-[10px] font-mono-ledger text-white border border-slate-800 flex items-center gap-1.5">
                     <span className={`w-1.5 h-1.5 rounded-full ${isMuted ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`}></span>
